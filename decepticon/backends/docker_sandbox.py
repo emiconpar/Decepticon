@@ -117,9 +117,19 @@ class TmuxSessionManager:
         )
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout
-            # Detect tmux server death and invalidate session cache
-            if "no server running" in error_msg or "server exited" in error_msg:
-                log.warning("tmux server died — invalidating all session caches")
+            # Detect tmux server death or session/pane destruction and invalidate cache
+            if any(
+                sig in error_msg
+                for sig in (
+                    "no server running",
+                    "server exited",
+                    "can't find pane",
+                    "can't find window",
+                    "session not found",
+                    "error connecting to",
+                )
+            ):
+                log.warning("tmux session unavailable (%s) — invalidating caches", error_msg.strip())
                 with TmuxSessionManager._init_lock:
                     TmuxSessionManager._initialized.clear()
             raise RuntimeError(error_msg)
@@ -231,7 +241,17 @@ class TmuxSessionManager:
             baseline = self._capture()
         except RuntimeError as e:
             error_msg = str(e)
-            if "no server running" in error_msg or "session not found" in error_msg:
+            if any(
+                sig in error_msg
+                for sig in (
+                    "no server running",
+                    "server exited",
+                    "session not found",
+                    "can't find pane",
+                    "can't find window",
+                    "error connecting to",
+                )
+            ):
                 log.warning("Session '%s' is dead — attempting recovery", self.session)
                 with TmuxSessionManager._init_lock:
                     TmuxSessionManager._initialized.discard(self.session)
