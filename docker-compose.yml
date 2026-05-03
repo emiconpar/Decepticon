@@ -10,6 +10,7 @@ services:
     volumes:
       - ./config/litellm.yaml:/app/config.yaml:ro
       - ${CLAUDE_CREDENTIALS_VOLUME:-/dev/null}:/root/.claude/.credentials.json:ro
+      - ${LITELLM_CHATGPT_TOKEN_DIR:-${HOME}/.config/litellm/chatgpt}:/root/.config/litellm/chatgpt
     entrypoint: ["python", "/app/litellm_startup.py"]
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:

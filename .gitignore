@@ -106,3 +106,8 @@ benchmark/results/XBEN-*-24/evidence/langsmith_trace.json
 benchmark/results/XBEN-*-24/evidence/iter14_pass.json
 benchmark/results/XBEN-*-24/evidence/*_iter*.json
 benchmark/workspaces/
+
+# Codex / OMX runtime artefacts (never committed)
+.omx/
+.env.bak.*
+benchmark/results/XBEN-*-24/run-loop*.log

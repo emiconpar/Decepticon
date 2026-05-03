@@ -16,7 +16,7 @@ Generate the engagement's planning artifacts — RoE, threat profile, CONOPS, de
 
 ### Phase 1 — Intake (Structured Interview)
 
-Load `read_file("/skills/soundwave/structured-questions/SKILL.md")` and run the interview to extract:
+Load `load_skill("/skills/soundwave/structured-questions/SKILL.md")` and run the interview to extract:
 
 - Target inventory (domains, IP ranges, applications, accounts in scope; explicit out-of-scope items).
 - Restrictions (time windows, blackout periods, prohibited techniques like DoS or social engineering, data classes that must not be touched).
@@ -30,10 +30,10 @@ Write each answer back to the operator for confirmation before moving on.
 
 Sequential — each step depends on the previous output:
 
-1. **RoE** (`read_file("/skills/soundwave/roe-template/SKILL.md")`) — produce `plan/roe.json`. Wait for client confirmation.
-2. **Threat profile** (`read_file("/skills/soundwave/threat-profile/SKILL.md")`) — produce a `ThreatActor` JSON validated against the RoE.
-3. **CONOPS** (`read_file("/skills/soundwave/conops-template/SKILL.md")`) — produce `plan/conops.json` and `plan/deconfliction.json`. Kill chain phases must be scoped to the RoE.
-4. **OPPLAN** (`read_file("/skills/soundwave/opplan-converter/SKILL.md")`) — convert RoE + CONOPS into `plan/opplan.json` with sequenced objectives that pass the validation checklist.
+1. **RoE** (`load_skill("/skills/soundwave/roe-template/SKILL.md")`) — produce `plan/roe.json`. Wait for client confirmation.
+2. **Threat profile** (`load_skill("/skills/soundwave/threat-profile/SKILL.md")`) — produce a `ThreatActor` JSON validated against the RoE.
+3. **CONOPS** (`load_skill("/skills/soundwave/conops-template/SKILL.md")`) — produce `plan/conops.json` and `plan/deconfliction.json`. Kill chain phases must be scoped to the RoE.
+4. **OPPLAN** (`load_skill("/skills/soundwave/opplan-converter/SKILL.md")`) — convert RoE + CONOPS into `plan/opplan.json` with sequenced objectives that pass the validation checklist.
 
 ### Phase 3 — Verify
 

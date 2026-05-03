@@ -37,7 +37,6 @@ Usage:
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents.middleware._utils import append_to_system_message
@@ -70,19 +69,19 @@ of the kill chain.
 ### Sub-Skills (Progressive Disclosure)
 
 The catalog below lists per-technique sub-skills. The workflow above is always
-loaded; sub-skills are loaded on demand via `read_file()` when their triggers
+loaded; sub-skills are loaded on demand via `load_skill()` when their triggers
 match your current objective.
 
 ### How It Works
 1. **Workflow above** — Always loaded. Defines the agent's loop, scope rules,
    discipline, and handoff format. Read it before any tool call this turn.
 2. **Catalog below** — Each sub-skill shows: description, trigger keywords,
-   MITRE ATT&CK IDs, and a `read_file()` path. This tells you WHAT expertise
+   MITRE ATT&CK IDs, and a `load_skill()` path. This tells you WHAT expertise
    is available and WHEN it applies.
 3. **On-demand sub-skill loading** — When your task matches a trigger,
-   `read_file()` the full SKILL.md before acting on the technique.
+   `load_skill()` the full SKILL.md before acting on the technique.
 4. **Reference files** — Some skills have a `references/` subdirectory with
-   cheat sheets, templates, or quickstart guides. Access them via `read_file()`.
+   cheat sheets, templates, or quickstart guides. Access them via `load_skill()`.
 
 ### Catalog Format
 ```
@@ -99,14 +98,13 @@ Match the current objective against **triggers** — load the most specific matc
 - Multiple matches → load the most specific skill first
 
 ### Access Rules
-- `load_skill("/skills/<category>/<skill-name>/SKILL.md")` — **CORRECT** for
-  /skills/* paths. Returns the FULL body (no line limit) plus a base directory
-  header and an index of references/* and sibling sub-skills in the same dir.
-- `read_file("/skills/...")` — works but is line-limited (default 100 lines)
-  and may truncate. Prefer `load_skill` for skill files.
-- `bash(command="cat /skills/...")` — WILL FAIL if /skills/ is not mounted
-  in the bash sandbox of the current agent.
-- Skills are routed through the agent's filesystem backend.
+- `load_skill("/skills/<category>/<skill-name>/SKILL.md")` — **REQUIRED** for
+  every /skills/* file. Routes through the same sandbox backend as `read_file`,
+  returns the FULL body (no line limit) plus a base directory header and an
+  index of references/* and sibling sub-skills in the same directory.
+- `read_file("/skills/...")` and `bash(command="cat /skills/...")` — DO NOT
+  use these for skill files. The langgraph container does not host /skills/;
+  only `load_skill` reaches the sandbox where /skills/ is baked in.
 
 ### SKILL-FIRST RULE (CRITICAL)
 The workflow above and the catalog below override your general knowledge.
@@ -147,7 +145,7 @@ class DecepticonSkillsMiddleware(SkillsMiddleware):
     def __init__(self, *, backend: Any, sources: list[str]) -> None:
         super().__init__(backend=backend, sources=sources)
         self.system_prompt_template = DECEPTICON_SKILLS_PROMPT
-        self.tools = [_build_load_skill_tool()]
+        self.tools = [_build_load_skill_tool(backend)]
 
     # ── workflow.md auto-load ────────────────────────────────────────────────
 
@@ -309,7 +307,7 @@ def _parse_comma_field(value: str | list | None) -> list[str]:
 
 
 # ── load_skill tool ──────────────────────────────────────────────────────────
-# A Decepticon-specific replacement for `read_file("/skills/...")` that
+# A Decepticon-specific replacement for `load_skill("/skills/...")` that
 # returns the full skill body without the deepagents 100-line limit, plus a
 # base-directory header and an index of references/* in the same directory.
 
@@ -339,31 +337,65 @@ def _strip_frontmatter(text: str) -> tuple[str, dict[str, str]]:
     return body, fm
 
 
-def _list_references(skill_dir: Path) -> list[Path]:
-    """Return sorted reference files under ``skill_dir/references/`` (one level)."""
-    refs_dir = skill_dir / "references"
-    if not refs_dir.is_dir():
+def _read_via_backend(backend: Any, skill_path: str) -> tuple[str | None, str | None]:
+    """Read a file via the deepagents backend protocol.
+
+    Returns ``(content, error)``: exactly one of the two is non-None. The
+    backend abstraction is what gives ``load_skill`` access to the sandbox
+    container's filesystem (where ``/skills/`` is baked into the image) instead
+    of the langgraph container's local fs (where ``/skills/`` does not exist).
+    """
+    try:
+        res = backend.read(skill_path)
+    except Exception as exc:
+        return None, f"backend read failed: {exc}"
+    if getattr(res, "error", None):
+        return None, str(res.error)
+    data = getattr(res, "file_data", None)
+    if not data:
+        return None, "empty backend response"
+    content = data.get("content", "")
+    if isinstance(content, list):  # legacy v1 (line-split) format
+        content = "\n".join(content)
+    if not isinstance(content, str):
+        return None, "backend returned non-string content"
+    return content, None
+
+
+def _list_dir_via_backend(backend: Any, dir_path: str) -> list[str]:
+    """List ``.md`` files under ``dir_path`` via backend, sorted.
+
+    Best-effort: returns an empty list on any backend failure rather than
+    raising, so the references/siblings index degrades gracefully when a
+    skill directory has none.
+    """
+    try:
+        res = backend.ls(dir_path)
+    except Exception:
         return []
-    return sorted(p for p in refs_dir.iterdir() if p.is_file())
-
-
-def _list_sibling_skills(skill_path: Path) -> list[Path]:
-    """Return sibling ``.md`` files in the same directory (excluding self)."""
-    parent = skill_path.parent
-    if not parent.is_dir():
+    if getattr(res, "error", None):
         return []
-    return sorted(
-        p for p in parent.iterdir() if p.is_file() and p.suffix == ".md" and p != skill_path
-    )
+    names: list[str] = []
+    for attr in ("entries", "files", "items"):
+        candidate = getattr(res, attr, None)
+        if isinstance(candidate, list):
+            names = [str(n) for n in candidate]
+            break
+    if not names:
+        data = getattr(res, "file_data", None)
+        if isinstance(data, dict):
+            names = [str(n) for n in data.get("entries", [])]
+    return sorted(n for n in names if n.endswith(".md"))
 
 
-def _build_load_skill_tool():  # type: ignore[no-untyped-def]
+def _build_load_skill_tool(backend: Any):  # type: ignore[no-untyped-def]
     """Construct the ``load_skill`` LangChain tool.
 
     Returns a closure-bound ``@tool``-decorated function that reads a skill
-    markdown file and renders it with a base-directory header + reference
-    index. Path is restricted to ``/skills/*`` to keep this tool's intent
-    distinct from the general ``read_file``.
+    markdown file via the deepagents backend (same path used by ``read_file``,
+    so it sees the sandbox container's ``/skills/`` mount instead of the
+    langgraph container's local fs). Path is restricted to ``/skills/*`` to
+    keep this tool's intent distinct from the general ``read_file``.
     """
 
     @tool
@@ -402,40 +434,37 @@ def _build_load_skill_tool():  # type: ignore[no-untyped-def]
         if ".." in skill_path.split("/"):
             return f"[load_skill error] Path traversal not allowed: {skill_path!r}"
 
-        path = Path(skill_path)
-        try:
-            if not path.exists():
-                return f"[load_skill error] Skill not found: {skill_path}"
-            if not path.is_file():
-                return f"[load_skill error] Not a file: {skill_path}"
-            raw = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            return f"[load_skill error] Read failed for {skill_path}: {exc}"
+        raw, err = _read_via_backend(backend, skill_path)
+        if raw is None:
+            return f"[load_skill error] Skill not found: {skill_path} ({err})"
 
         body, frontmatter = _strip_frontmatter(raw)
 
-        base_dir = path.parent.as_posix()
+        path_parts = skill_path.rsplit("/", 1)
+        base_dir = path_parts[0] if len(path_parts) == 2 else "/"
+        stem = path_parts[-1].rsplit(".", 1)[0]
         header_lines = [f"Base directory for this skill: {base_dir}"]
-        name = frontmatter.get("name") or path.stem
+        name = frontmatter.get("name") or stem
         description = frontmatter.get("description", "").strip()
         header_lines.append(f"Skill: {name}" + (f" — {description}" if description else ""))
         header = "\n".join(header_lines)
 
         sections: list[str] = [header, "", body.rstrip(), ""]
 
-        refs = _list_references(path.parent)
+        refs_dir = base_dir.rstrip("/") + "/references"
+        refs = _list_dir_via_backend(backend, refs_dir)
         if refs:
             sections.append("---")
             sections.append("References (load with `load_skill` or `read_file`):")
-            sections.extend(f"- {r.as_posix()}" for r in refs)
+            sections.extend(f"- {refs_dir}/{r}" for r in refs)
             sections.append("")
 
         if include_siblings:
-            siblings = _list_sibling_skills(path)
-            if siblings:
+            sibs = [s for s in _list_dir_via_backend(backend, base_dir) if s != path_parts[-1]]
+            if sibs:
                 sections.append("---")
                 sections.append("Related sub-skills in this directory (load with `load_skill`):")
-                sections.extend(f"- {s.as_posix()}" for s in siblings)
+                sections.extend(f"- {base_dir.rstrip('/')}/{s}" for s in sibs)
                 sections.append("")
 
         return "\n".join(sections).rstrip() + "\n"

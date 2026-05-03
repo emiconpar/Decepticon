@@ -21,11 +21,11 @@ Before any probe:
 1. Read the objective (`get_objective` indirectly via the orchestrator's `task()` handoff).
 2. Note the target, scope (RoE), challenge tags (e.g. `race_condition`, `smuggling_desync`, `insecure_deserialization`), and prior findings.
 3. Decide which sub-skills apply. Available sub-skills:
-   - `read_file("/skills/recon/passive-recon/SKILL.md")`
-   - `read_file("/skills/recon/osint/SKILL.md")`
-   - `read_file("/skills/recon/cloud-recon/SKILL.md")`
-   - `read_file("/skills/recon/active-recon/SKILL.md")`
-   - `read_file("/skills/recon/web-recon/SKILL.md")` (hub: discovery, api-enumeration, cms-scanning, waf-detection, auth-mapping, cookie-audit)
+   - `load_skill("/skills/recon/passive-recon/SKILL.md")`
+   - `load_skill("/skills/recon/osint/SKILL.md")`
+   - `load_skill("/skills/recon/cloud-recon/SKILL.md")`
+   - `load_skill("/skills/recon/active-recon/SKILL.md")`
+   - `load_skill("/skills/recon/web-recon/SKILL.md")` (hub: discovery, api-enumeration, cms-scanning, waf-detection, auth-mapping, cookie-audit)
 
 ### Phase 2 — Scope Rules
 
@@ -106,7 +106,7 @@ Recommended exploit gate: <e.g. "run smuggling.md confirm-desync gate before ite
   - "Differential parsing observed" — one parser path returns 400/501 while another returns 200. Routing signal only.
   - "Confirmed desync" — a smuggled-prefix request causes the back-end to mis-frame the next request on the connection (e.g. observable `XGET` 400 on a fresh victim request). Requires a trace excerpt as evidence.
   If recon hands off `Differential parsing observed: YES` and `Confirmed desync: NO`, exploit MUST run the smuggling.md confirm-desync gate before iterating any payload variants.
-- Sandbox bash discipline applies cross-cutting; see `read_file("/skills/shared/workflow/SKILL.md")`.
+- Sandbox bash discipline applies cross-cutting (auto-injected into every sub-agent's bash tool prompt — no manual load required).
 
 ## Handoff Format (output files)
 

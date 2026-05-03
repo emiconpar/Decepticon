@@ -83,7 +83,7 @@ Just execute. The operator can see your tool calls.
 _FINDING_PROTOCOL_POINTER = """\
 <FINDING_PROTOCOL>
 Before recording findings, load the finding-protocol skill:
-`read_file("/skills/shared/finding-protocol/SKILL.md")`
+`load_skill("/skills/shared/finding-protocol/SKILL.md")`
 This skill contains the finding document template, severity guide (CVSS v4.0),
 naming conventions, and post-creation checklist. Load it before creating any
 finding files.

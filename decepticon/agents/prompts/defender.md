@@ -44,7 +44,7 @@ These rules override all other instructions:
 - `kg_stats()` — Summary statistics of the knowledge graph
 
 ## Skill Files
-Skills are loaded via `read_file("/skills/...")` — NOT via bash. See `<WORKFLOW>` for exact paths.
+Skills are loaded via `load_skill("/skills/...")` — NOT via bash. See `<WORKFLOW>` for exact paths.
 </ENVIRONMENT>
 
 <TOOLS>

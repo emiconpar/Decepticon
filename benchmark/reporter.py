@@ -8,32 +8,36 @@ from benchmark.schemas import BenchmarkReport, ChallengeResult
 
 
 class Reporter:
-    """Writes benchmark reports to disk in JSON and Markdown formats."""
+    """Writes benchmark reports to disk in JSON and Markdown formats.
+
+    Layout per run:
+      - single challenge:  ``<results_dir>/<challenge_id>/report.{json,md}``
+                           + ``<results_dir>/<challenge_id>/evidence/summary.{json,md}``
+                           Re-runs OVERWRITE the per-challenge directory; history is
+                           preserved via the per-cycle git commit (atomic-commit-per-cycle
+                           gate in the self-improvement loop).
+      - multi-challenge batch: ``<results_dir>/batch-<UTC-timestamp>/...`` so concurrent
+                               batches don't clobber each other.
+    """
 
     def __init__(self, results_dir: Path) -> None:
         self.results_dir = results_dir
-        self.evidence_dir = results_dir / "evidence"
 
-    def _stem(self, report: BenchmarkReport) -> str:
-        """Return the filename stem for this report.
+    def _is_single(self, report: BenchmarkReport) -> bool:
+        return len(report.results) == 1
 
-        Format:
-          - single challenge: ``<challenge_id>_<UTC-timestamp>``
-          - multi-challenge batch: ``batch-<UTC-timestamp>``
-
-        The timestamp suffix preserves history across repeat runs of the same
-        challenge (self-improvement loop reruns the same id many times) while
-        still keeping each file scannable by challenge name.
-        """
+    def _run_dir(self, report: BenchmarkReport) -> Path:
+        """Return the per-run directory containing report + evidence."""
+        if self._is_single(report):
+            return self.results_dir / report.results[0].challenge_id
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        if len(report.results) == 1:
-            return f"{report.results[0].challenge_id}_{ts}"
-        return f"batch-{ts}"
+        return self.results_dir / f"batch-{ts}"
 
     def write_json(self, report: BenchmarkReport) -> Path:
         """Write the report as a JSON file and return its path."""
-        self.results_dir.mkdir(parents=True, exist_ok=True)
-        path = self.results_dir / f"{self._stem(report)}.json"
+        out_dir = self._run_dir(report)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / "report.json"
         path.write_text(
             json.dumps(report.model_dump(mode="json"), indent=2, default=str),
             encoding="utf-8",
@@ -42,8 +46,9 @@ class Reporter:
 
     def write_markdown(self, report: BenchmarkReport) -> Path:
         """Write the report as a Markdown file and return its path."""
-        self.results_dir.mkdir(parents=True, exist_ok=True)
-        path = self.results_dir / f"{self._stem(report)}.md"
+        out_dir = self._run_dir(report)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / "report.md"
 
         lines: list[str] = []
         lines.append(f"# Benchmark Report — {report.provider_name}")
@@ -95,18 +100,26 @@ class Reporter:
         return path
 
     def write_evidence(self, report: BenchmarkReport) -> Path:
-        """Write per-challenge solve evidence files for public reporting."""
-        self.evidence_dir.mkdir(parents=True, exist_ok=True)
-        run_dir = self.evidence_dir / self._stem(report)
-        run_dir.mkdir(parents=True, exist_ok=True)
+        """Write per-challenge solve evidence files for public reporting.
+
+        Layout:
+          - single-challenge run: ``<run_dir>/evidence/summary.{json,md}`` (one rollup
+            because there is exactly one challenge in the run).
+          - batch run: ``<run_dir>/evidence/<challenge_id>.{json,md}`` per challenge
+            plus ``<run_dir>/evidence/index.json`` aggregating the batch.
+        """
+        evidence_dir = self._run_dir(report) / "evidence"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+
+        if self._is_single(report):
+            self._write_challenge_evidence(evidence_dir, report.results[0], stem="summary")
+            return evidence_dir
 
         for result in report.results:
-            self._write_challenge_evidence(run_dir, result)
+            self._write_challenge_evidence(evidence_dir, result, stem=result.challenge_id)
 
-        # Write summary index
         index = {
             "provider": report.provider_name,
-            "stem": self._stem(report),
             "total": report.total,
             "passed": report.passed,
             "pass_rate": report.pass_rate,
@@ -122,12 +135,15 @@ class Reporter:
                 for r in report.results
             ],
         }
-        index_path = run_dir / "index.json"
-        index_path.write_text(json.dumps(index, indent=2, default=str), encoding="utf-8")
-        return run_dir
+        (evidence_dir / "index.json").write_text(
+            json.dumps(index, indent=2, default=str), encoding="utf-8"
+        )
+        return evidence_dir
 
-    def _write_challenge_evidence(self, run_dir: Path, result: ChallengeResult) -> None:
-        """Write JSON and Markdown evidence for a single challenge."""
+    def _write_challenge_evidence(
+        self, evidence_dir: Path, result: ChallengeResult, *, stem: str
+    ) -> None:
+        """Write JSON + Markdown evidence under <evidence_dir>/<stem>.{json,md}."""
         evidence = {
             "challenge_id": result.challenge_id,
             "challenge_name": result.challenge_name,
@@ -140,8 +156,9 @@ class Reporter:
             "token_count": result.token_count,
             "error": result.error,
         }
-        json_path = run_dir / f"{result.challenge_id}.json"
-        json_path.write_text(json.dumps(evidence, indent=2, default=str), encoding="utf-8")
+        (evidence_dir / f"{stem}.json").write_text(
+            json.dumps(evidence, indent=2, default=str), encoding="utf-8"
+        )
 
         lines = [
             f"# {result.challenge_id}: {result.challenge_name}",
@@ -163,5 +180,4 @@ class Reporter:
             lines.extend(["", "## Agent Summary", "", result.agent_summary])
         lines.append("")
 
-        md_path = run_dir / f"{result.challenge_id}.md"
-        md_path.write_text("\n".join(lines), encoding="utf-8")
+        (evidence_dir / f"{stem}.md").write_text("\n".join(lines), encoding="utf-8")

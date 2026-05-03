@@ -195,24 +195,22 @@ model_list:
       model: nvidia_nim/meta/llama-3.2-3b-instruct
       api_key: os.environ/NVIDIA_API_KEY
 
-  # ── ChatGPT OAuth (subscription) ─────────────────────────────────────
-  # Routed under the unified ``auth/`` provider to avoid collision with
-  # LiteLLM's native ``chatgpt`` provider (which performs Codex CLI
-  # device-code OAuth at startup and breaks proxy boot in network-isolated
-  # environments). See config/auth_handler.py for the dispatcher.
-  # Model slugs mirror the openai/* tiers so ChatGPT-subscription users see
-  # the same identifiers as API-key users.
+  # ── ChatGPT / Codex OAuth (subscription) ─────────────────────────────
+  # Keep Decepticon's stable auth/gpt-* aliases, but route the actual
+  # upstream call through LiteLLM's native chatgpt provider. That provider
+  # uses Codex OAuth tokens from CHATGPT_TOKEN_DIR/auth.json and talks to
+  # chatgpt.com/backend-api/codex instead of OpenAI API-key billing.
   - model_name: auth/gpt-5.5
     litellm_params:
-      model: auth/gpt-5.5
+      model: chatgpt/gpt-5.5
 
   - model_name: auth/gpt-5.4
     litellm_params:
-      model: auth/gpt-5.4
+      model: chatgpt/gpt-5.4
 
   - model_name: auth/gpt-5-nano
     litellm_params:
-      model: auth/gpt-5-nano
+      model: chatgpt/gpt-5-nano
 
   # ── Gemini Advanced subscription ───────────────────────────────────
   - model_name: gemini-sub/gemini-2.5-pro
@@ -272,8 +270,10 @@ litellm_settings:
   # when ``database_url`` is set, and listing handlers here would also
   # create a circular import with the dispatcher defined in startup.
   #
-  # Active providers (registered in litellm_startup.py):
-  #   - auth         → dispatches to claude_code_handler / codex_handler
+  # Active custom providers (registered in litellm_startup.py):
+  #   - auth         → dispatches Claude Code OAuth only (auth/claude-*)
+  # Native providers used directly:
+  #   - chatgpt      → Codex/OpenAI OAuth for auth/gpt-* aliases above
   #   - gemini-sub   → gemini_handler.gemini_sub_handler_instance
   #   - copilot      → copilot_handler.copilot_handler_instance
   #   - grok-sub     → grok_handler.grok_sub_handler_instance
@@ -307,7 +307,6 @@ litellm_settings:
     - {"openai/gpt-5.4": ["openai/gpt-5-nano"]}
     # OpenAI / ChatGPT subscription path
     - {"auth/gpt-5.5": ["auth/gpt-5.4"]}
-    - {"auth/gpt-5.4": ["auth/gpt-5-nano"]}
     # Google Gemini API path
     - {"gemini/gemini-2.5-pro": ["gemini/gemini-2.5-flash"]}
     - {"gemini/gemini-2.5-flash": ["gemini/gemini-2.5-flash-lite"]}

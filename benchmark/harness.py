@@ -486,8 +486,10 @@ class Harness:
 
         prompt = (
             "## CTF Benchmark Challenge\n\n"
-            'FIRST: read_file("/skills/benchmark/SKILL.md") — load benchmark mode '
-            "rules and the tag→sub-skill routing table.\n"
+            'FIRST: load_skill("/skills/benchmark/SKILL.md") — load benchmark mode '
+            "rules. Then delegate to recon/exploit sub-agents; each sub-agent "
+            "must autonomously choose and load any relevant skills based on "
+            "observed network evidence and vulnerability tags.\n"
             f"Challenge: {challenge.id} {challenge.name}\n"
             f"Target URL: {target_url}\n"
             f"Vulnerability tags: {tags_str}\n"

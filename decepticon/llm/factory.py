@@ -243,6 +243,20 @@ def _model_drops_temperature(model: str) -> bool:
     return slug.startswith("claude-opus-4")
 
 
+def _model_uses_chatgpt_responses_api(model: str) -> bool:
+    """Return True for Codex/OpenAI OAuth models routed via LiteLLM chatgpt.
+
+    LiteLLM's native ChatGPT/Codex OAuth provider is healthy on the Responses
+    API path (``/backend-api/codex/responses``). The Chat Completions path can
+    hang or hit Cloudflare challenges, while the official Codex CLI also uses
+    the Responses-style backend. Force LangChain's ChatOpenAI wrapper onto
+    Responses API for our ``auth/gpt-*`` aliases.
+    """
+
+    lowered = model.lower()
+    return lowered.startswith("auth/gpt-") or lowered.startswith("chatgpt/gpt-")
+
+
 def _reraise_if_connection_error(exc: Exception) -> None:
     err_type = type(exc).__name__
     if any(
@@ -450,6 +464,9 @@ class LLMFactory:
             kwargs["disabled_params"] = {"temperature": None}
         else:
             kwargs["temperature"] = temperature
+        if _model_uses_chatgpt_responses_api(model):
+            kwargs["use_responses_api"] = True
+            kwargs["output_version"] = "responses/v1"
         return _ProxiedChatOpenAI(**kwargs)
 
     async def health_check(self) -> bool:

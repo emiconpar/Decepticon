@@ -145,4 +145,38 @@ sessions and `background=True` instead.
 
 ALWAYS use `write_file` for file creation. NEVER `cat > file << EOF` —
 it echoes content back as tool output and wastes context.
+
+## Raw-Socket / Long-Running Probe Discipline
+
+Raw-socket probes (HTTP request smuggling, custom protocol fuzzers, bespoke TLS
+handshakes) are the most common silent-stall surface in this sandbox —
+`socket.recv()` defaults to BLOCKING FOREVER. Treat every raw-socket script as
+untrusted until the rules below hold.
+
+| Rule | Why |
+|------|-----|
+| `sock.settimeout(5)` BEFORE `connect` AND BEFORE EACH `recv` | `socket.create_connection(timeout=...)` covers connect only; recv blocks forever without `settimeout` after. |
+| Outer wall: `timeout 60 python3 -u -c '...'` even when inner timeouts are set | Inner timeout can lose to a kernel wedge or buffered TLS state. Hard wall is mandatory. |
+| `python3 -u` (or `sys.stdout.flush()` after each write) | Without `-u`, a wedged process leaves stdout buffered — looks like "no output" when the script is actually finishing. |
+| Bounded iteration — break on empty `recv`, or after N bytes / N rounds | `while True: data = s.recv(4096)` against a keep-alive socket never terminates. |
+| Prefer inline `python3 -c` over `cat > script.py && python3 script.py` | Inline keeps the harness in the tool transcript and avoids re-creating files between calls. |
+
+## Wedged-Session Recovery
+
+Symptom: `bash_status()` shows session as `running` for >90s past expected completion AND `bash_output(session=...)` returns empty diffs across two consecutive checks.
+
+1. Check `bash_status()` — confirm `running` not `done(...) consumed`.
+2. `bash_kill(session=<wedged>)` — tears down tmux, preserves log at `/workspace/.sessions/<name>.log` for forensics.
+3. Open a fresh session under a NEW name (e.g. `<orig>_retry`) — do NOT reuse the killed session name in the same turn (race with cleanup).
+4. Re-launch with both `sock.settimeout(5)` AND `timeout 60` outer wall.
+
+## Background Job Budget
+
+Any single bash command running >5 min wall-clock with no observable progress
+output should be `bash_kill`'d and the strategy reconsidered. Long-running ops
+(nmap full port sweep, ffuf large wordlist) belong in `background=True` named
+sessions while you continue work on `main`.
+
+For credential brute-force specifically: cap at 5 minutes OR 1000 attempts,
+whichever first. If those fail, the challenge design is not "brute it"; pivot.
 </BASH_TOOLS>"""

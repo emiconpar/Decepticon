@@ -15,14 +15,14 @@ Sub-skills under this directory:
 
 | Sub-skill | Path | When to load |
 |---|---|---|
-| Discovery | `read_file("/skills/recon/web-recon/discovery.md")` | directory/file fuzzing, vhost, JS analysis |
-| API enumeration | `read_file("/skills/recon/web-recon/api-enumeration.md")` | REST/GraphQL/parameter fuzzing |
-| CMS scanning | `read_file("/skills/recon/web-recon/cms-scanning.md")` | WordPress/Joomla/Drupal detected |
-| WAF detection | `read_file("/skills/recon/web-recon/waf-detection.md")` | proxy/CDN suspected |
-| Auth mapping | `read_file("/skills/recon/web-recon/auth-mapping.md")` | login flow analysis |
-| Cookie audit | `read_file("/skills/recon/web-recon/cookie-audit.md")` | sink behind session, race-condition recon |
+| Discovery | `load_skill("/skills/recon/web-recon/discovery.md")` | directory/file fuzzing, vhost, JS analysis |
+| API enumeration | `load_skill("/skills/recon/web-recon/api-enumeration.md")` | REST/GraphQL/parameter fuzzing |
+| CMS scanning | `load_skill("/skills/recon/web-recon/cms-scanning.md")` | WordPress/Joomla/Drupal detected |
+| WAF detection | `load_skill("/skills/recon/web-recon/waf-detection.md")` | proxy/CDN suspected |
+| Auth mapping | `load_skill("/skills/recon/web-recon/auth-mapping.md")` | login flow analysis |
+| Cookie audit | `load_skill("/skills/recon/web-recon/cookie-audit.md")` | sink behind session, race-condition recon |
 
-For overall recon workflow, scope rules, and handoff format, see `read_file("/skills/recon/workflow.md")` (root workflow).
+For overall recon workflow, scope rules, and handoff format, see `load_skill("/skills/recon/workflow.md")` (root workflow).
 
 ## Output files
 
