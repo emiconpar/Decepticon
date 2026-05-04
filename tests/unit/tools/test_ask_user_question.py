@@ -147,14 +147,26 @@ def test_skips_writer_when_outside_graph_context():
         assert _invoke() == "Yes"
 
 
-def test_rejects_header_longer_than_max():
-    too_long = "X" * (HEADER_MAX_CHARS + 1)
-    with patch(
-        "decepticon.tools.interaction.ask_user.interrupt",
-        return_value="Yes",
+def test_truncates_header_longer_than_max():
+    """BeforeValidator auto-truncates header instead of rejecting.
+
+    Local models occasionally pass headers longer than max_length.
+    Truncation keeps the engagement flowing instead of aborting with
+    a Pydantic ValidationError.
+    """
+    too_long = "X" * (HEADER_MAX_CHARS + 10)
+    with (
+        patch(
+            "decepticon.tools.interaction.ask_user.get_stream_writer",
+            return_value=lambda _evt: None,
+        ),
+        patch(
+            "decepticon.tools.interaction.ask_user.interrupt",
+            return_value="Yes",
+        ),
     ):
-        with pytest.raises(ValidationError):
-            _invoke(header=too_long)
+        result = _invoke(header=too_long)
+        assert result == "Yes"
 
 
 def test_accepts_empty_options():
