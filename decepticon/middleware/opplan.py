@@ -42,6 +42,21 @@ from decepticon.core.schemas import (
     OpsecLevel,
 )
 
+# ── Reducer helpers ───────────────────────────────────────────────────
+
+
+def _reduce_engagement_name(current: str | None, update: str | None) -> str | None:
+    """Reducer for ``engagement_name`` — last non-None writer wins.
+
+    Both OPPLANState and EngagementContextState define ``engagement_name``.
+    When multiple tools or middleware write to this key in the same graph
+    step, LangGraph requires a reducer to reconcile the values. The reducer
+    prefers the latest non-None value, which matches the "set once" semantics
+    of this field.
+    """
+    return update if update is not None else current
+
+
 # ── State Schema ──────────────────────────────────────────────────────
 
 
@@ -56,7 +71,7 @@ class OPPLANState(AgentState):
     objectives: Annotated[NotRequired[list[dict]], OmitFromInput]
     """List of OPPLAN objectives in dict form (serialized Objective models)."""
 
-    engagement_name: Annotated[NotRequired[str], OmitFromInput]
+    engagement_name: Annotated[NotRequired[str], _reduce_engagement_name, OmitFromInput]
     """Current engagement name for context."""
 
     threat_profile: Annotated[NotRequired[str], OmitFromInput]

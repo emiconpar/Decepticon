@@ -31,13 +31,14 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.types import Command
 from typing_extensions import override
 
+from decepticon.middleware.opplan import _reduce_engagement_name
 from decepticon.tools.bash.bash import bash_workspace
 
 
 class EngagementContextState(AgentState):
     """State extension carrying launcher- and harness-decided context."""
 
-    engagement_name: NotRequired[Annotated[str, "Workspace slug set by the launcher."]]
+    engagement_name: Annotated[NotRequired[str], _reduce_engagement_name, "Workspace slug set by the launcher."]
     workspace_path: NotRequired[Annotated[str, "Sandbox root for this engagement."]]
     # Benchmark / CTF challenge context — populated by the benchmark harness.
     target_url: NotRequired[Annotated[str, "CTF challenge target URL."]]
