@@ -15,12 +15,52 @@ after resume.
 
 from __future__ import annotations
 
+import json
 from typing import Annotated, Any
 
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+# ── Argument coercers (resilience for local models) ───────────────────
+
+
+def _coerce_options_list(v: Any) -> list[Any]:
+    """Coerce malformed ``options`` argument into a list.
+
+    Local models (Ollama, etc.) occasionally produce:
+    - A JSON *string* instead of a JSON *array* for the options list
+    - A single ``QuestionOption`` dict instead of a list of them
+
+    Silently normalising these patterns keeps the engagement flow alive
+    instead of dropping into a bare ``ask_user_question`` error loop.
+    """
+    if isinstance(v, list):
+        return v
+    if isinstance(v, str):
+        try:
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # Unparseable string → empty list; the picker still works via
+        # free-text Other fallback.
+        return []
+    if isinstance(v, dict):
+        return [v]
+    return []
+
+
+def _truncate_header(v: str) -> str:
+    """Auto-truncate ``header`` to ``max_length=12`` instead of erroring."""
+    if isinstance(v, str) and len(v) > 12:
+        return v[:12]
+    return v
+
+
+# ── Option model ──────────────────────────────────────────────────────
 
 
 class QuestionOption(BaseModel):
@@ -51,6 +91,7 @@ def ask_user_question(
     question: str,
     header: Annotated[
         str,
+        BeforeValidator(_truncate_header),
         Field(
             max_length=12,
             description="Short label (≤12 chars) shown as the picker's compact chrome label.",
@@ -58,6 +99,7 @@ def ask_user_question(
     ],
     options: Annotated[
         list[QuestionOption],
+        BeforeValidator(_coerce_options_list),
         Field(
             max_length=5,
             description=(
