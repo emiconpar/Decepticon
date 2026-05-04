@@ -44,7 +44,8 @@ def _coerce_options_list(v: Any) -> list[Any]:
             if isinstance(parsed, list):
                 return parsed
         except (json.JSONDecodeError, TypeError):
-            pass
+            # Intentionally ignore malformed JSON and normalize to [] below.
+            _ = "invalid options payload"
         # Unparseable string → empty list; the picker still works via
         # free-text Other fallback.
         return []
