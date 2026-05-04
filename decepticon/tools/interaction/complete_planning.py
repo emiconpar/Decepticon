@@ -13,7 +13,17 @@ from typing import Annotated, Any
 
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.config import get_stream_writer
-from pydantic import Field
+from pydantic import BeforeValidator, Field
+
+
+def _sanitize_engagement_name(v: str) -> str:
+    """Coerce engagement_name to valid slug: strip, fallback, truncate."""
+    if not isinstance(v, str):
+        return "unnamed-engagement"
+    v = v.strip()
+    if not v:
+        return "unnamed-engagement"
+    return v[:64]
 
 
 def _safe_writer():
@@ -27,6 +37,7 @@ def _safe_writer():
 def complete_engagement_planning(
     engagement_name: Annotated[
         str,
+        BeforeValidator(_sanitize_engagement_name),
         Field(
             min_length=1,
             max_length=64,

@@ -213,7 +213,11 @@ def _iter_requirements(path: Path) -> list[tuple[str, str, str]]:
 
 def _iter_package_lock(path: Path) -> list[tuple[str, str, str]]:
     deps: list[tuple[str, str, str]] = []
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError) as exc:
+        log.warning("Failed to parse package-lock.json %s: %s", path, exc)
+        return deps
 
     packages = payload.get("packages")
     if isinstance(packages, dict):

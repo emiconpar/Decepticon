@@ -36,12 +36,15 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from deepagents.middleware._utils import append_to_system_message
 from deepagents.middleware.skills import SkillsMiddleware as BaseSkillsMiddleware
 from langchain_core.tools import tool
+
+_log = logging.getLogger("decepticon.middleware.skills")
 
 if TYPE_CHECKING:
     from deepagents.middleware.skills import SkillMetadata
@@ -155,6 +158,7 @@ class SkillsMiddleware(BaseSkillsMiddleware):
         try:
             res = backend.read(path)
         except Exception:
+            _log.warning("Failed to read workflow at %s (backend error)", path)
             return None
         if getattr(res, "error", None):
             return None
@@ -172,6 +176,7 @@ class SkillsMiddleware(BaseSkillsMiddleware):
         try:
             res = await backend.aread(path)
         except Exception:
+            _log.warning("Failed to async-read workflow at %s (backend error)", path)
             return None
         if getattr(res, "error", None):
             return None
@@ -372,6 +377,7 @@ def _list_dir_via_backend(backend: Any, dir_path: str) -> list[str]:
     try:
         res = backend.ls(dir_path)
     except Exception:
+        _log.warning("Failed to list skill directory %s (backend error)", dir_path)
         return []
     if getattr(res, "error", None):
         return []
