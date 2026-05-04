@@ -143,9 +143,11 @@ class SkillsMiddleware(BaseSkillsMiddleware):
     Args:
         backend: Backend instance for file operations.
         sources: List of skill source paths (e.g., ``['/skills/recon/', '/skills/shared/']``).
+
     """
 
     def __init__(self, *, backend: Any, sources: list[str]) -> None:
+        """Initialize with a backend and ordered skill source directories."""
         super().__init__(backend=backend, sources=sources)
         self.system_prompt_template = DECEPTICON_SKILLS_PROMPT
         self.tools = [_build_load_skill_tool(backend)]
