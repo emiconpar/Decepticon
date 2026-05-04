@@ -1270,14 +1270,18 @@ class OPPLANMiddleware(AgentMiddleware):
 
         # Block parallel state-mutating calls (add + update both write objectives)
         mutating_calls = [
-            tc for tc in last_ai.tool_calls if tc["name"] in ("add_objective", "update_objective")
+            tc
+            for tc in last_ai.tool_calls
+            if tc["name"]
+            in ("add_objective", "update_objective", "objective_expand", "objective_collapse")
         ]
         if len(mutating_calls) > 1:
             return {
                 "messages": [
                     ToolMessage(
                         content=(
-                            "Error: OPPLAN state-mutating tools (add_objective, update_objective) "
+                            "Error: OPPLAN state-mutating tools (add_objective, update_objective, "
+                            "objective_expand, objective_collapse) "
                             "must be called one at a time, not in parallel. Each call needs "
                             "the updated objectives list. Call one, wait for the result, "
                             "then call the next."

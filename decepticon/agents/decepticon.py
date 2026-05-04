@@ -88,7 +88,8 @@ def create_decepticon_agent():
     # langgraph process never reads from the host filesystem.
     backend = sandbox
 
-    # Build sub-agents from existing agent factories
+    # Build sub-agents from existing agent factories (lazy-load to avoid
+    # importing all 8 agent modules on every startup).  # noqa: PLC0415
     from decepticon.agents.ad_operator import create_ad_operator_agent
     from decepticon.agents.analyst import create_analyst_agent
     from decepticon.agents.cloud_hunter import create_cloud_hunter_agent

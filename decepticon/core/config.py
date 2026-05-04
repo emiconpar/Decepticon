@@ -50,7 +50,7 @@ class DockerConfig(BaseModel):
     # ── tmux session behavior ──
     poll_interval: float = Field(0.5, gt=0.0, description="Seconds between capture-pane polls")
     stall_seconds: float = Field(
-        3.0, gt=0.0, description="Seconds of no screen change → treat as interactive prompt"
+        5.0, gt=0.0, description="Seconds of no screen change → treat as interactive prompt"
     )
     max_output_chars: int = Field(
         30_000, gt=0, description="Truncate command output larger than this"
