@@ -172,6 +172,24 @@ def collect_requested_models(env: Mapping[str, str] | None = None) -> set[str]:
     return models
 
 
+def collect_enabled_subscription_flags(env: Mapping[str, str] | None = None) -> set[str]:
+    """Return subscription OAuth flags that require dynamic route injection."""
+    source = env if env is not None else os.environ
+    return {flag for flag in _SUBSCRIPTION_ROUTES if _is_truthy(source.get(flag, ""))}
+
+
+def requires_dynamic_config(env: Mapping[str, str] | None = None) -> bool:
+    """Return True when startup must generate a LiteLLM config copy.
+
+    Dynamic config is needed for two independent reasons:
+    user-requested model routes (DECEPTICON_MODEL*, OLLAMA_MODEL) and gated
+    subscription OAuth routes (DECEPTICON_AUTH_*). ChatGPT OAuth commonly has
+    no DECEPTICON_MODEL* override, so checking only requested models skips the
+    chatgpt/* subscription routes entirely.
+    """
+    return bool(collect_requested_models(env) or collect_enabled_subscription_flags(env))
+
+
 def _provider_prefix(model_name: str) -> str:
     return model_name.split("/", 1)[0].lower().replace("-", "_")
 
@@ -249,8 +267,8 @@ def build_model_entry(model_name: str) -> dict[str, Any]:
 _SUBSCRIPTION_ROUTES: dict[str, list[dict[str, Any]]] = {
     # env flag → model_list entries
     "DECEPTICON_AUTH_CHATGPT": [
-        {"model_name": "auth/gpt-5.5", "litellm_params": {"model": "chatgpt/gpt-5.5"}},
-        {"model_name": "auth/gpt-5.4", "litellm_params": {"model": "chatgpt/gpt-5.4"}},
+        {"model_name": "chatgpt/gpt-5.5", "litellm_params": {"model": "chatgpt/gpt-5.5"}},
+        {"model_name": "chatgpt/gpt-5.4", "litellm_params": {"model": "chatgpt/gpt-5.4"}},
     ],
     "DECEPTICON_AUTH_GEMINI": [
         {
@@ -279,7 +297,7 @@ _SUBSCRIPTION_ROUTES: dict[str, list[dict[str, Any]]] = {
 # Fallback entries for subscription routes — appended to litellm_settings.fallbacks
 _SUBSCRIPTION_FALLBACKS: dict[str, list[dict[str, list[str]]]] = {
     "DECEPTICON_AUTH_CHATGPT": [
-        {"auth/gpt-5.5": ["auth/gpt-5.4"]},
+        {"chatgpt/gpt-5.5": ["chatgpt/gpt-5.4"]},
     ],
     "DECEPTICON_AUTH_GEMINI": [
         {"gemini-sub/gemini-2.5-pro": ["gemini-sub/gemini-2.5-flash"]},
@@ -378,8 +396,10 @@ def write_dynamic_config(config_path: str | Path, output_path: str | Path) -> Pa
 
 __all__ = [
     "build_model_entry",
+    "collect_enabled_subscription_flags",
     "collect_requested_models",
     "merge_dynamic_models",
+    "requires_dynamic_config",
     "validate_model_name",
     "write_dynamic_config",
 ]

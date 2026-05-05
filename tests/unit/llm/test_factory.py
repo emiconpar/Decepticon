@@ -338,6 +338,21 @@ class TestActionableErrorTranslation:
         assert "anthropic/claude-opus-4-7" in msg
         assert "DECEPTICON_AUTH_PRIORITY" in msg
 
+    def test_chatgpt_token_invalidated_branch(self):
+        exc = Exception(
+            "Error code: 401 - {'error': {'message': 'Your authentication token "
+            "has been invalidated. Please try signing in again.', "
+            "'code': 'token_invalidated'}} No fallback model group found for "
+            "original model_group=chatgpt/gpt-5.4."
+        )
+        with pytest.raises(RuntimeError) as info:
+            self._translate(exc, "chatgpt/gpt-5.4")
+        msg = str(info.value)
+        assert "ChatGPT authentication" in msg
+        assert "invalidated" in msg
+        assert "decepticon onboard --reset" in msg
+        assert "~/.config/litellm/chatgpt/auth.json" in msg
+
     def test_400_bad_request_branch(self):
         # openai.BadRequestError carries 'Error code: 400' in repr.
         exc = Exception("Error code: 400 - {'error': {'message': 'temperature is deprecated'}}")

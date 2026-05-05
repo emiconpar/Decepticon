@@ -103,7 +103,7 @@ These can be set in your `.env` file (configure with `decepticon onboard`) or as
 | `DECEPTICON_MODEL_PROFILE` | `eco` | Tier preset: `eco` (per-agent), `max` (all HIGH), or `test` (all LOW) |
 | `DECEPTICON_AUTH_PRIORITY` | `anthropic_oauth,anthropic_api,openai_oauth,openai_api,google_api,minimax_api,deepseek_api,xai_api,mistral_api,openrouter_api,nvidia_api,ollama_local` | Comma-separated AuthMethod priority — first method primary, rest are fallbacks. Methods whose credential isn't configured are skipped at runtime. |
 | `DECEPTICON_AUTH_CLAUDE_CODE` | `false` | Set `true` to route Anthropic models via Claude Code OAuth (`auth/claude-*` in LiteLLM) |
-| `DECEPTICON_AUTH_CHATGPT` | `false` | Set `true` to route OpenAI models via ChatGPT subscription OAuth (`auth/gpt-*`) |
+| `DECEPTICON_AUTH_CHATGPT` | `false` | Set `true` to route OpenAI models via ChatGPT subscription OAuth (`chatgpt/gpt-*`) |
 | `DECEPTICON_AUTH_GEMINI` | `false` | Set `true` to route Google models via Gemini Advanced OAuth (`gemini-sub/*`) |
 | `DECEPTICON_AUTH_COPILOT` | `false` | Set `true` for Microsoft Copilot Pro OAuth (`copilot/*`) |
 | `DECEPTICON_AUTH_GROK` | `false` | Set `true` for xAI SuperGrok OAuth (`grok-sub/*`) |

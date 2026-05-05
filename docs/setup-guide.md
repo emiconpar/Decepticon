@@ -318,11 +318,11 @@ Use your ChatGPT Pro, Plus, or Team subscription instead of OpenAI API billing.
 
 **Supported tiers:**
 
-| Tier | Models Available (via `auth/gpt-5.x` route) |
+| Tier | Models Available (via `chatgpt/gpt-5.x` route) |
 |------|--------------------------------------------|
-| ChatGPT Plus ($20/mo) | `auth/gpt-5.5`, `auth/gpt-5.4` |
-| ChatGPT Pro ($200/mo) | `auth/gpt-5.5`, `auth/gpt-5.4` |
-| ChatGPT Team | `auth/gpt-5.5`, `auth/gpt-5.4` + admin controls |
+| ChatGPT Plus ($20/mo) | `chatgpt/gpt-5.5`, `chatgpt/gpt-5.4` |
+| ChatGPT Pro ($200/mo) | `chatgpt/gpt-5.5`, `chatgpt/gpt-5.4` |
+| ChatGPT Team | `chatgpt/gpt-5.5`, `chatgpt/gpt-5.4` + admin controls |
 
 **Setup:**
 
@@ -348,8 +348,8 @@ decepticon
 
 **How it works:**
 
-- Decepticon exposes ChatGPT subscription models as `auth/gpt-5.5`
-  and `auth/gpt-5.4`.
+- Decepticon exposes ChatGPT subscription models as `chatgpt/gpt-5.5`
+  and `chatgpt/gpt-5.4`.
 - LiteLLM dynamic config maps those aliases to LiteLLM's native
   `chatgpt/gpt-*` provider routes only when `DECEPTICON_AUTH_CHATGPT=true`.
 - `docker-compose.yml` mounts the host token directory into the LiteLLM
@@ -457,7 +457,7 @@ Complete list of all supported LLM providers and their pre-configured models:
 |----------|--------|-----------|------|
 | **Subscriptions (OAuth — no API billing)** | | | |
 | Claude Max/Pro/Team | Opus, Sonnet, Haiku | OAuth | $20–$100/mo |
-| ChatGPT Pro/Plus/Team | `auth/gpt-5.5`, `auth/gpt-5.4` | OAuth | $20–$200/mo |
+| ChatGPT Pro/Plus/Team | `chatgpt/gpt-5.5`, `chatgpt/gpt-5.4` | OAuth | $20–$200/mo |
 | Gemini Advanced | Gemini 2.5 Pro/Flash | OAuth | $20/mo |
 | Copilot Pro | `copilot/gpt-4o`, `copilot/o1`, `copilot/o3-mini` | OAuth | $20/mo |
 | SuperGrok | Grok-3, Grok-3 Mini | OAuth | X Premium+ |

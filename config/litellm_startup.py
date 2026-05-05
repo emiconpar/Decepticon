@@ -16,16 +16,22 @@ from pathlib import Path
 
 # Register custom OAuth handler before LiteLLM processes the config
 sys.path.insert(0, "/app")
-from litellm_dynamic_config import collect_requested_models, write_dynamic_config  # noqa: E402
+from litellm_dynamic_config import (  # noqa: E402
+    collect_enabled_subscription_flags,
+    collect_requested_models,
+    requires_dynamic_config,
+    write_dynamic_config,
+)
 from ollama_probe import extract_ollama_models, has_ollama_route, probe  # noqa: E402
 
 
 def _replace_config_arg() -> None:
     """Append env-requested model routes to the LiteLLM config before boot."""
-    requested = collect_requested_models()
-    if not requested:
+    if not requires_dynamic_config():
         return
 
+    requested = collect_requested_models()
+    subscription_flags = collect_enabled_subscription_flags()
     config_path: str | None = None
     for idx, arg in enumerate(sys.argv):
         if arg == "--config" and idx + 1 < len(sys.argv):
@@ -54,7 +60,11 @@ def _replace_config_arg() -> None:
             )
             sys.argv.extend(["--config", str(generated)])
 
-    print(f"[decepticon] registered {len(requested)} dynamic model route(s)", flush=True)
+    print(
+        "[decepticon] generated dynamic LiteLLM config "
+        f"(model_routes={len(requested)}, subscription_flags={len(subscription_flags)})",
+        flush=True,
+    )
 
 
 _replace_config_arg()

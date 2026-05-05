@@ -271,11 +271,11 @@ def _model_uses_chatgpt_responses_api(model: str) -> bool:
     API path (``/backend-api/codex/responses``). The Chat Completions path can
     hang or hit Cloudflare challenges, while the official Codex CLI also uses
     the Responses-style backend. Force LangChain's ChatOpenAI wrapper onto
-    Responses API for our ``auth/gpt-*`` aliases.
+    Responses API for ChatGPT subscription routes.
     """
 
     lowered = model.lower()
-    return lowered.startswith("auth/gpt-") or lowered.startswith("chatgpt/gpt-")
+    return lowered.startswith("chatgpt/gpt-")
 
 
 def _model_is_deepseek_thinking(model: str) -> bool:
@@ -479,6 +479,14 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
     err_type = type(exc).__name__
     msg = str(exc)
     msg_lower = msg.lower()
+
+    if "token_invalidated" in msg_lower and model_name.lower().startswith("chatgpt/"):
+        raise RuntimeError(
+            f"ChatGPT authentication for model '{model_name}' was invalidated "
+            f"by OpenAI (401). Re-run 'decepticon onboard --reset' and select "
+            f"ChatGPT OAuth to refresh ~/.config/litellm/chatgpt/auth.json.\n"
+            f"Underlying: {msg}"
+        ) from exc
 
     # LiteLLM puts a recognizable prefix in the inner message when the
     # proxy ran out of fallback options for a model_group — issue #107.
