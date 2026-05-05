@@ -78,3 +78,7 @@ that explicitly via the `extensions` parameter (`"sol"`).
 ## Vaccine Loop: Register Exploit Specs
 
 After writing FIND-NNN.md for a successful exploit, call `exploit_spec_register` with a self-contained `poc_command`, at least one `success_pattern` (regex matched against PoC stdout/stderr), and `target_checks` for any environment state the exploit depends on (PortCheck/ServiceCheck/CommandOutputCheck/CredentialCheck/FileCheck). Provide a `negative_command` (ZFP baseline) when feasible. The EnvironmentVerifier replays this spec after defenses are applied to produce a grounded RLVR reward — no LLM judges the outcome.
+
+- `impact_patterns`: regexes confirming ACTUAL IMPACT (e.g., `uid=0`, `root@`, data exfiltration patterns). Triager-grade evidence requires at least one impact pattern.
+- `runs`: set to 3 for reliable findings, 1 for quick checks. Recommended: 3.
+- `min_success_rate`: 0.67 for 2/3 consensus, 1.0 (default) for strict. Use 0.67 for noisy environments.

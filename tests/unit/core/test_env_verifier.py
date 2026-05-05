@@ -251,3 +251,161 @@ async def test_persistence_writes_snapshot_and_evidence(tmp_path: Path) -> None:
     assert evidence_path.exists()
     parsed = json.loads(evidence_path.read_text(encoding="utf-8"))
     assert parsed["finding_ref"] == "FIND-001"
+
+
+# ── Test 9: N-run consensus 2-of-3 partial when threshold strict ──────────
+
+
+async def test_n_run_consensus_2_of_3_partial(tmp_path: Path) -> None:
+    """spec.runs=3, min_success_rate=1.0. 1/3 succeeds → success_rate < threshold → PARTIAL."""
+    call_count = {"n": 0}
+
+    async def _run(command: str) -> tuple[str, str, int]:
+        if "exploit" in command.lower() or "PWNED" in command:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return ("PWNED root@target", "", 0)
+            return ("", "Permission denied", 1)
+        return ("matched", "", 0)
+
+    verifier = EnvironmentVerifier(tmp_path, _run)
+    spec = ExploitSpec(
+        finding_ref="FIND-RUN3",
+        poc_command="curl -X POST exploit",
+        success_patterns=["PWNED"],
+        runs=3,
+        min_success_rate=1.0,
+        target_checks=[
+            CommandOutputCheck(command="echo matched", pattern="matched", expect_match=True)
+        ],
+    )
+
+    post = await verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
+    evidence = await verifier.verify_blocked(spec, pre=None, post=post)
+
+    assert evidence.consensus is not None
+    assert evidence.consensus.n_runs == 3
+    assert evidence.consensus.n_success == 1
+    assert evidence.re_attack_outcome == ReAttackOutcome.PARTIAL
+
+
+# ── Test 10: 2-of-3 with relaxed threshold + env unchanged → PASSED ───────
+
+
+async def test_n_run_consensus_2_of_3_blocked_when_threshold_met(tmp_path: Path) -> None:
+    """spec.runs=3, min_success_rate=0.5. 2/3 succeed → PASSED (signals still match)."""
+    call_count = {"n": 0}
+
+    async def _run(command: str) -> tuple[str, str, int]:
+        if "exploit" in command.lower() or "PWNED" in command:
+            call_count["n"] += 1
+            if call_count["n"] <= 2:
+                return ("PWNED root@target", "", 0)
+            return ("", "Permission denied", 1)
+        return ("matched", "", 0)
+
+    verifier = EnvironmentVerifier(tmp_path, _run)
+    spec = ExploitSpec(
+        finding_ref="FIND-RUN3B",
+        poc_command="curl -X POST exploit",
+        success_patterns=["PWNED"],
+        runs=3,
+        min_success_rate=0.5,
+        target_checks=[
+            CommandOutputCheck(command="echo matched", pattern="matched", expect_match=True)
+        ],
+    )
+
+    post = await verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
+    evidence = await verifier.verify_blocked(spec, pre=None, post=post)
+
+    assert evidence.consensus is not None
+    assert evidence.consensus.n_success == 2
+    assert evidence.consensus.success_rate >= 0.5
+    assert evidence.re_attack_outcome == ReAttackOutcome.PASSED
+
+
+# ── Test 11: invalid baseline → ERROR ─────────────────────────────────────
+
+
+async def test_baseline_invalid_gives_error(tmp_path: Path) -> None:
+    """Invalid baseline (PoC fails pre-defense) → verify_blocked returns ERROR."""
+
+    async def _run(_: str) -> tuple[str, str, int]:
+        return ("", "Connection refused", 1)
+
+    verifier = EnvironmentVerifier(tmp_path, _run)
+    spec = make_spec("FIND-BASE")
+
+    baseline = await verifier.verify_baseline(spec)
+    assert baseline.valid is False
+
+    post = await verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
+    evidence = await verifier.verify_blocked(spec, pre=None, post=post, baseline=baseline)
+    assert evidence.baseline_valid is False
+    assert evidence.re_attack_outcome == ReAttackOutcome.ERROR
+
+
+# ── Test 12: impact_patterns populate evidence + reward.impact_confirmed ──
+
+
+async def test_impact_patterns_populate_evidence(tmp_path: Path) -> None:
+    """impact_patterns matched in PoC output → impact_signals_matched + impact_confirmed."""
+
+    async def _run(command: str) -> tuple[str, str, int]:
+        if "exploit" in command.lower() or "PWNED" in command:
+            return ("PWNED uid=0 root@target", "", 0)
+        return ("matched", "", 0)
+
+    verifier = EnvironmentVerifier(tmp_path, _run)
+    spec = ExploitSpec(
+        finding_ref="FIND-IMP",
+        poc_command="curl -X POST exploit",
+        success_patterns=["PWNED"],
+        impact_patterns=["uid=0"],
+        target_checks=[
+            CommandOutputCheck(command="echo matched", pattern="matched", expect_match=True)
+        ],
+    )
+
+    post = await verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
+    evidence = await verifier.verify_blocked(spec, pre=None, post=post)
+    assert "uid=0" in evidence.impact_signals_matched
+    reward = verifier.compute_reward(evidence)
+    assert reward.impact_confirmed is True
+
+
+# ── Test 13: duplicate detection suppresses second run ────────────────────
+
+
+async def test_duplicate_detection_suppresses_second(tmp_path: Path) -> None:
+    """Same fingerprint on second call → duplicate_of set, outcome ERROR."""
+    runner = make_runner(poc_response=("PWNED root@target", "", 0))
+    verifier = EnvironmentVerifier(tmp_path, runner)
+
+    spec_a = ExploitSpec(
+        finding_ref="FIND-DUP-A",
+        poc_command="curl -X POST exploit",
+        success_patterns=["PWNED"],
+        target_host="10.0.0.5",
+        target_checks=[
+            CommandOutputCheck(command="echo matched", pattern="matched", expect_match=True)
+        ],
+    )
+    spec_b = ExploitSpec(
+        finding_ref="FIND-DUP-B",
+        poc_command="curl -X POST exploit",
+        success_patterns=["PWNED"],
+        target_host="10.0.0.5",
+        target_checks=[
+            CommandOutputCheck(command="echo matched", pattern="matched", expect_match=True)
+        ],
+    )
+
+    post_a = await verifier.capture_state(spec_a, phase=CheckPhase.POST_DEFENSE)
+    _ = await verifier.verify_blocked(spec_a, pre=None, post=post_a)
+
+    post_b = await verifier.capture_state(spec_b, phase=CheckPhase.POST_DEFENSE)
+    evidence_b = await verifier.verify_blocked(spec_b, pre=None, post=post_b)
+    assert evidence_b.duplicate_of is not None
+    assert evidence_b.re_attack_outcome == ReAttackOutcome.ERROR
