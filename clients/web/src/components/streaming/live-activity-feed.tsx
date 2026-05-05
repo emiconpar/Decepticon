@@ -396,7 +396,6 @@ export function LiveActivityFeed({ events, engagementId, className }: LiveActivi
       if (!recorded) return "now";
       return formatRelativeTime(Date.now() - recorded);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

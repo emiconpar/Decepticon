@@ -33,7 +33,7 @@ type AgentStatus = "idle" | "processing" | "completed";
 
 const STALENESS_THRESHOLD_MS = 15_000; // Agent idle if no recent event
 
-function deriveStatus(agentEvents: SubagentCustomEvent[], now: number): AgentStatus {
+function deriveStatus(agentEvents: SubagentCustomEvent[]): AgentStatus {
   if (agentEvents.length === 0) return "idle";
 
   const last = agentEvents[agentEvents.length - 1];
@@ -125,9 +125,8 @@ export function AgentDetailPanel({
   // Elapsed time since last event
   const feedRef = useRef<HTMLDivElement>(null);
 
-  // Derive status — Date.now() is intentionally called here to compute elapsed time
-  // eslint-disable-next-line react-hooks/purity
-  const status = useMemo(() => deriveStatus(agentEvents, Date.now()), [agentEvents]);
+  // Derive status
+  const status = useMemo(() => deriveStatus(agentEvents), [agentEvents]);
   const statusMeta = STATUS_META[status];
 
   // Latest subagent_message content
@@ -219,7 +218,6 @@ export function AgentDetailPanel({
                   key={`${event.type}-${event.agent}-${i}`}
                   event={event}
                   agentColor={agentColor}
-                  now={now}
                 />
               ))
             )}
@@ -252,11 +250,9 @@ export function AgentDetailPanel({
 function ActivityRow({
   event,
   agentColor,
-  now,
 }: {
   event: SubagentCustomEvent;
   agentColor: string;
-  now: number;
 }) {
   const elapsed = event.elapsed != null ? event.elapsed * 1000 : undefined;
 
