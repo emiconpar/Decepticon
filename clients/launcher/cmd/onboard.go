@@ -536,12 +536,11 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("write .env: %w", err)
 	}
 
-	if resetFlag && contains(methods, methodOpenAIOAuth) {
-		if archived, err := resetChatGPTAuthForReauth(time.Now()); err != nil {
+	if contains(methods, methodOpenAIOAuth) {
+		if synced, target, err := syncCodexChatGPTAuth(values); err != nil {
 			return err
-		} else if archived != "" {
-			ui.Warning("Archived stale ChatGPT OAuth token: " + archived)
-			ui.DimText("LiteLLM will request a fresh ChatGPT device login on the next prompt.")
+		} else if synced {
+			ui.DimText("Synced Codex ChatGPT auth to " + target)
 		}
 	}
 
@@ -575,39 +574,19 @@ func nonEmpty(s string) error {
 	return nil
 }
 
-func resetChatGPTAuthForReauth(now time.Time) (string, error) {
-	tokenDir := strings.TrimSpace(os.Getenv("LITELLM_CHATGPT_TOKEN_DIR"))
+func chatGPTTokenDir(env map[string]string) (string, error) {
+	tokenDir := strings.TrimSpace(config.Get(env, "LITELLM_CHATGPT_TOKEN_DIR", ""))
 	if tokenDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("locate home directory for ChatGPT auth reset: %w", err)
-		}
-		tokenDir = filepath.Join(home, ".config", "litellm", "chatgpt")
+		tokenDir = strings.TrimSpace(os.Getenv("LITELLM_CHATGPT_TOKEN_DIR"))
 	}
-	return archiveChatGPTAuthFile(tokenDir, now)
-}
-
-func archiveChatGPTAuthFile(tokenDir string, now time.Time) (string, error) {
-	authPath := filepath.Join(tokenDir, "auth.json")
-	info, err := os.Stat(authPath)
-	if os.IsNotExist(err) {
-		return "", nil
+	if tokenDir != "" {
+		return tokenDir, nil
 	}
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("stat ChatGPT auth file %s: %w", authPath, err)
+		return "", fmt.Errorf("locate home directory for ChatGPT auth: %w", err)
 	}
-	if info.IsDir() {
-		return "", fmt.Errorf("expected ChatGPT auth file at %s but found a directory", authPath)
-	}
-
-	archivePath := filepath.Join(
-		tokenDir,
-		fmt.Sprintf("auth.json.invalidated.%s", now.Format("20060102-150405")),
-	)
-	if err := os.Rename(authPath, archivePath); err != nil {
-		return "", fmt.Errorf("archive ChatGPT auth file %s: %w", authPath, err)
-	}
-	return archivePath, nil
+	return filepath.Join(home, ".config", "litellm", "chatgpt"), nil
 }
 
 func boolStr(b bool) string {

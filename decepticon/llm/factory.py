@@ -483,8 +483,9 @@ def _reraise_with_actionable_message(exc: Exception, model_name: str) -> None:
     if "token_invalidated" in msg_lower and model_name.lower().startswith("chatgpt/"):
         raise RuntimeError(
             f"ChatGPT authentication for model '{model_name}' was invalidated "
-            f"by OpenAI (401). Re-run 'decepticon onboard --reset' and select "
-            f"ChatGPT OAuth to refresh ~/.config/litellm/chatgpt/auth.json.\n"
+            f"by OpenAI (401). Re-authenticate Codex so ~/.codex/auth.json "
+            f"has fresh tokens, then restart Decepticon so the launcher can sync "
+            f"them into ~/.config/litellm/chatgpt/auth.json.\n"
             f"Underlying: {msg}"
         ) from exc
 

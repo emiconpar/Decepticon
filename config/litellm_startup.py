@@ -170,8 +170,7 @@ def _patch_chatgpt_responses_text_aggregation() -> None:
     normal/error cases.
 
     Skipped entirely when DECEPTICON_AUTH_CHATGPT=false (or unset) to avoid
-    importing the chatgpt provider module, which triggers a device-code
-    OAuth prompt at startup even when ChatGPT is not configured.
+    importing the chatgpt provider module when ChatGPT is not configured.
     """
     chatgpt_enabled = os.environ.get("DECEPTICON_AUTH_CHATGPT", "false").strip().lower()
     if chatgpt_enabled not in ("true", "1", "yes"):

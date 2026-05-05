@@ -350,7 +350,7 @@ class TestActionableErrorTranslation:
         msg = str(info.value)
         assert "ChatGPT authentication" in msg
         assert "invalidated" in msg
-        assert "decepticon onboard --reset" in msg
+        assert "~/.codex/auth.json" in msg
         assert "~/.config/litellm/chatgpt/auth.json" in msg
 
     def test_400_bad_request_branch(self):

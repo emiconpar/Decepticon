@@ -354,9 +354,9 @@ decepticon
   `chatgpt/gpt-*` provider routes only when `DECEPTICON_AUTH_CHATGPT=true`.
 - `docker-compose.yml` mounts the host token directory into the LiteLLM
   container at `/root/.config/litellm/chatgpt`.
-- Access tokens are handled by LiteLLM's native ChatGPT provider. It stores
-  OAuth credentials in `~/.config/litellm/chatgpt/auth.json` and refreshes
-  them as needed.
+- Codex CLI remains the source of truth at `~/.codex/auth.json`. The launcher
+  syncs those tokens into LiteLLM's native
+  `~/.config/litellm/chatgpt/auth.json` format before startup.
 
 **Custom token path:**
 
@@ -844,10 +844,9 @@ cat ~/.claude/.credentials.json | python3 -c "import sys,json; d=json.load(sys.s
 
 **ChatGPT OAuth: missing or expired auth**
 
-LiteLLM's native ChatGPT provider stores credentials at
-`~/.config/litellm/chatgpt/auth.json`. If the file is missing or expired,
-restart Decepticon and follow the ChatGPT device-code login instructions shown
-in the LiteLLM logs.
+Codex CLI credentials are the source of truth at `~/.codex/auth.json`.
+Re-authenticate Codex, then restart Decepticon so the launcher can sync those
+tokens into LiteLLM's native `~/.config/litellm/chatgpt/auth.json` format.
 
 **API Key: "401 Unauthorized"**
 

@@ -105,6 +105,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 		_ = os.Setenv("CLAUDE_CREDENTIALS_VOLUME", "/dev/null")
 	}
 
+	if strings.EqualFold(strings.TrimSpace(config.Get(env, "DECEPTICON_AUTH_CHATGPT", "")), "true") {
+		if synced, target, err := syncCodexChatGPTAuth(env); err != nil {
+			return err
+		} else if synced {
+			ui.DimText("Synced Codex ChatGPT auth to " + target)
+		}
+	}
+
 	// 2.5. Update notice. Applying updates is intentionally explicit via
 	// `decepticon update` because it can replace the binary, compose files,
 	// LiteLLM config, and Docker images.

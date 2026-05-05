@@ -244,8 +244,8 @@ func ValidateAPIKeys(env map[string]string) error {
 //     instead of a single session token. accept either env name.
 //   - Copilot Pro uses a refresh-token rotation (COPILOT_REFRESH_TOKEN)
 //     instead of a session cookie. Same fall-through, different env name.
-//   - ChatGPT uses LiteLLM's native chatgpt provider. It persists OAuth
-//     credentials as auth.json and can create that file via device-code login,
+//   - ChatGPT uses LiteLLM's native chatgpt provider. The launcher syncs
+//     Codex CLI credentials from ~/.codex/auth.json into LiteLLM's auth.json,
 //     so the launcher must not require a pasted browser session cookie.
 type subscriptionMethod struct {
 	Toggle                string   // DECEPTICON_AUTH_<X> boolean enabling this path
@@ -300,8 +300,8 @@ var oauthSubscriptions = map[string]subscriptionMethod{
 //     ~/.claude/.credentials.json. LiteLLM mounts that file read-only.
 //   - DECEPTICON_AUTH_<X>=true (CHATGPT, GEMINI, COPILOT, GROK,
 //     PERPLEXITY) is satisfied by a token env var or a token file at its
-//     mounted token directory. ChatGPT uses LiteLLM native OAuth and is
-//     allowed through so LiteLLM can run its device-code login flow.
+//     mounted token directory. ChatGPT is allowed through because Codex CLI
+//     credentials are synced into LiteLLM's native auth store at startup.
 //
 // Local LLM path: ollama_local in DECEPTICON_AUTH_PRIORITY (or any
 // OLLAMA_API_BASE configured) is treated as a valid credential. Ollama

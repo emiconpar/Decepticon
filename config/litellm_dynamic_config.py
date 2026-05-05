@@ -324,9 +324,9 @@ def _inject_subscription_routes(
     """Conditionally add subscription OAuth model routes and fallbacks.
 
     Only registers routes for providers whose ``DECEPTICON_AUTH_*`` flag is
-    truthy.  This prevents LiteLLM's native OAuth providers from attempting
-    device-code or session-token handshakes at startup when the user hasn't
-    enabled the auth method.
+    truthy. This prevents LiteLLM's native OAuth providers from attempting
+    OAuth/session handshakes at startup when the user hasn't enabled the auth
+    method.
     """
     source = env if env is not None else os.environ
     model_list = config.setdefault("model_list", [])
