@@ -124,10 +124,9 @@ export function AgentDetailPanel({
 
   // Elapsed time since last event
   const feedRef = useRef<HTMLDivElement>(null);
-  const now = Date.now();
 
   // Derive status
-  const status = useMemo(() => deriveStatus(agentEvents, now), [agentEvents, now]);
+  const status = useMemo(() => deriveStatus(agentEvents, Date.now()), [agentEvents]);
   const statusMeta = STATUS_META[status];
 
   // Latest subagent_message content

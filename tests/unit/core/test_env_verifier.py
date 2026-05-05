@@ -1,4 +1,5 @@
 """Unit tests for EnvironmentVerifier — environment-grounded vaccine verification."""
+
 from __future__ import annotations
 
 import json

@@ -97,7 +97,9 @@ class VaccineOrchestrator:
     ) -> None:
         self.workspace = workspace
         self._state_path = workspace / ".vaccine-state.json"
-        self.state: OrchestratorState = state if state is not None else (self._load_state() or OrchestratorState())
+        self.state: OrchestratorState = (
+            state if state is not None else (self._load_state() or OrchestratorState())
+        )
         if verifier is not None:
             self._verifier: EnvironmentVerifier | None = verifier
         else:
@@ -504,13 +506,9 @@ class VaccineOrchestrator:
         if use_env and self._verifier is not None:
             spec = self._verifier.load_spec(finding_ref)
             if spec is not None:
-                post = await self._verifier.capture_state(
-                    spec, phase=CheckPhase.POST_DEFENSE
-                )
+                post = await self._verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
                 pre = self._verifier.load_snapshot(finding_ref, CheckPhase.PRE_DEFENSE)
-                evidence = await self._verifier.verify_blocked(
-                    spec, pre=pre, post=post
-                )
+                evidence = await self._verifier.verify_blocked(spec, pre=pre, post=post)
                 reward = self._verifier.compute_reward(evidence)
                 self._verifier.persist_evidence(evidence)
                 self._verifier.persist_reward(reward)

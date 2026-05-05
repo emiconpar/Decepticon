@@ -296,9 +296,7 @@ class EngagementLoop:
             if use_env and self._verifier is not None:
                 spec = self._verifier.load_spec(finding_ref)
                 if spec is not None:
-                    pre = await self._verifier.capture_state(
-                        spec, phase=CheckPhase.PRE_DEFENSE
-                    )
+                    pre = await self._verifier.capture_state(spec, phase=CheckPhase.PRE_DEFENSE)
                     self._verifier.persist_snapshot(pre)
 
             log.info("Invoking defender agent for %s", finding_ref)
@@ -329,13 +327,9 @@ class EngagementLoop:
         if use_env and self._verifier is not None:
             spec = self._verifier.load_spec(finding_ref)
             if spec is not None:
-                post = await self._verifier.capture_state(
-                    spec, phase=CheckPhase.POST_DEFENSE
-                )
+                post = await self._verifier.capture_state(spec, phase=CheckPhase.POST_DEFENSE)
                 pre = self._verifier.load_snapshot(finding_ref, CheckPhase.PRE_DEFENSE)
-                evidence = await self._verifier.verify_blocked(
-                    spec, pre=pre, post=post
-                )
+                evidence = await self._verifier.verify_blocked(spec, pre=pre, post=post)
                 reward = self._verifier.compute_reward(evidence)
                 self._verifier.persist_evidence(evidence)
                 self._verifier.persist_reward(reward)
@@ -800,7 +794,6 @@ class EngagementLoop:
         except (OSError, ValueError) as exc:
             log.error("Failed to update opplan objective %s: %s", obj_id, exc)
 
-
     def _recover_stale_objectives(self) -> None:
         """Reset any IN_PROGRESS objectives back to PENDING.
 
@@ -824,6 +817,7 @@ class EngagementLoop:
         )
         for obj in stale:
             self._update_opplan_objective(obj.id, ObjectiveStatus.PENDING)
+
 
 # ── Convenience entry point ────────────────────────────────────────────────────
 

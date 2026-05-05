@@ -1,4 +1,5 @@
 """Independent environment verifier — no LLM in the verification path."""
+
 from __future__ import annotations
 
 import logging
@@ -61,29 +62,19 @@ class EnvironmentVerifier:
             log.warning("Could not load exploit spec for %s: %s", finding_ref, exc)
             return None
 
-    def load_snapshot(
-        self, finding_ref: str, phase: CheckPhase
-    ) -> EnvironmentSnapshot | None:
-        path = (
-            self._workspace
-            / "verification"
-            / f"{finding_ref}-{phase.value}-snapshot.json"
-        )
+    def load_snapshot(self, finding_ref: str, phase: CheckPhase) -> EnvironmentSnapshot | None:
+        path = self._workspace / "verification" / f"{finding_ref}-{phase.value}-snapshot.json"
         if not path.exists():
             return None
         try:
-            return EnvironmentSnapshot.model_validate_json(
-                path.read_text(encoding="utf-8")
-            )
+            return EnvironmentSnapshot.model_validate_json(path.read_text(encoding="utf-8"))
         except Exception as exc:
             log.warning("Could not load snapshot %s/%s: %s", finding_ref, phase, exc)
             return None
 
     # ── Environment probing ───────────────────────────────────────────────
 
-    async def capture_state(
-        self, spec: ExploitSpec, phase: CheckPhase
-    ) -> EnvironmentSnapshot:
+    async def capture_state(self, spec: ExploitSpec, phase: CheckPhase) -> EnvironmentSnapshot:
         results: list[TargetCheckResult] = []
         for i, check in enumerate(spec.target_checks):
             check_id = f"{spec.finding_ref}-{phase.value}-{i}"
@@ -131,10 +122,7 @@ class EnvironmentVerifier:
     async def _check_port(
         self, check_id: str, check: PortCheck, phase: CheckPhase
     ) -> TargetCheckResult:
-        cmd = (
-            f"nmap -p {check.port} {check.host} --open -oG - 2>/dev/null "
-            f"| grep -c 'open'"
-        )
+        cmd = f"nmap -p {check.port} {check.host} --open -oG - 2>/dev/null | grep -c 'open'"
         stdout, stderr, _code = await self._runner(cmd)
         combined = f"{stdout}\n{stderr}"
         is_open = bool(re.search(r"[1-9]", stdout.strip()))
@@ -150,10 +138,7 @@ class EnvironmentVerifier:
     async def _check_service(
         self, check_id: str, check: ServiceCheck, phase: CheckPhase
     ) -> TargetCheckResult:
-        cmd = (
-            f"curl -s -o /tmp/_svc_check -w '%{{http_code}}' "
-            f"--max-time 10 {check.url!r}"
-        )
+        cmd = f"curl -s -o /tmp/_svc_check -w '%{{http_code}}' --max-time 10 {check.url!r}"
         stdout, _stderr, _code = await self._runner(cmd)
         status_str = stdout.strip()
         try:
@@ -164,13 +149,9 @@ class EnvironmentVerifier:
         body_ok = True
         raw = ""
         if check.body_pattern:
-            body_stdout, _, _ = await self._runner(
-                "cat /tmp/_svc_check 2>/dev/null || true"
-            )
+            body_stdout, _, _ = await self._runner("cat /tmp/_svc_check 2>/dev/null || true")
             raw = body_stdout[:500]
-            body_ok = bool(
-                re.search(check.body_pattern, body_stdout, re.DOTALL | re.IGNORECASE)
-            )
+            body_ok = bool(re.search(check.body_pattern, body_stdout, re.DOTALL | re.IGNORECASE))
         positive = status_ok and body_ok
         return TargetCheckResult(
             check_id=check_id,
@@ -188,11 +169,7 @@ class EnvironmentVerifier:
         phase: CheckPhase,
     ) -> TargetCheckResult:
         cmd = check.command
-        pattern = (
-            check.success_pattern
-            if isinstance(check, CredentialCheck)
-            else check.pattern
-        )
+        pattern = check.success_pattern if isinstance(check, CredentialCheck) else check.pattern
         expect = True if isinstance(check, CredentialCheck) else check.expect_match
         stdout, stderr, code = await self._runner(cmd)
         combined = f"{stdout}\n{stderr}"
@@ -210,21 +187,15 @@ class EnvironmentVerifier:
     async def _check_file(
         self, check_id: str, check: FileCheck, phase: CheckPhase
     ) -> TargetCheckResult:
-        stdout, _, _ = await self._runner(
-            f"test -f {check.path!r} && echo EXISTS || echo MISSING"
-        )
+        stdout, _, _ = await self._runner(f"test -f {check.path!r} && echo EXISTS || echo MISSING")
         exists = "EXISTS" in stdout
         exists_ok = exists == check.must_exist
         content_ok = True
         raw = ""
         if check.content_pattern and exists:
-            cat_out, _, _ = await self._runner(
-                f"cat {check.path!r} 2>/dev/null || true"
-            )
+            cat_out, _, _ = await self._runner(f"cat {check.path!r} 2>/dev/null || true")
             raw = cat_out[:500]
-            content_ok = bool(
-                re.search(check.content_pattern, cat_out, re.DOTALL | re.IGNORECASE)
-            )
+            content_ok = bool(re.search(check.content_pattern, cat_out, re.DOTALL | re.IGNORECASE))
         positive = exists_ok and content_ok
         return TargetCheckResult(
             check_id=check_id,
@@ -296,9 +267,7 @@ class EnvironmentVerifier:
             return ReAttackOutcome.PASSED
         post_positives = [r.positive for r in post.results]
         pre_positives = [r.positive for r in pre.results]
-        flipped = sum(
-            1 for p, q in zip(pre_positives, post_positives) if p and not q
-        )
+        flipped = sum(1 for p, q in zip(pre_positives, post_positives) if p and not q)
         if 0 < flipped < len(pre_positives):
             return ReAttackOutcome.PARTIAL
         if flipped == len(pre_positives) and len(pre_positives) > 0:
@@ -338,10 +307,7 @@ class EnvironmentVerifier:
     def persist_snapshot(self, snapshot: EnvironmentSnapshot) -> None:
         out_dir = self._workspace / "verification"
         out_dir.mkdir(parents=True, exist_ok=True)
-        path = (
-            out_dir
-            / f"{snapshot.finding_ref}-{snapshot.phase.value}-snapshot.json"
-        )
+        path = out_dir / f"{snapshot.finding_ref}-{snapshot.phase.value}-snapshot.json"
         path.write_text(snapshot.model_dump_json(indent=2), encoding="utf-8")
         log.debug("Snapshot written: %s", path)
 

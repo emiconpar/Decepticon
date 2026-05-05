@@ -1640,9 +1640,7 @@ def suggest_objectives_from_chains(
                 highest = sev
 
         phase = "initial-access"
-        if any(
-            step.node_kind in {NodeKind.CREDENTIAL, NodeKind.SECRET} for step in chain.steps
-        ):
+        if any(step.node_kind in {NodeKind.CREDENTIAL, NodeKind.SECRET} for step in chain.steps):
             phase = "post-exploit"
         elif (
             "admin" in chain.crown_jewel_label.lower()
