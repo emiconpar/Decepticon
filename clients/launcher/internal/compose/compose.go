@@ -52,7 +52,7 @@ func (c *Compose) baseArgs() []string {
 
 // readVersion returns the installed version from $DECEPTICON_HOME/.version,
 // or an empty string if the file is missing or unreadable. The launcher
-// (install + auto-update) is the single writer; compose falls back to :latest
+// (install + explicit update) is the single writer; compose falls back to :latest
 // when the marker is absent.
 func (c *Compose) readVersion() string {
 	data, err := os.ReadFile(filepath.Join(c.Home, ".version"))
@@ -70,7 +70,7 @@ func (c *Compose) readVersion() string {
 func (c *Compose) composeEnv() []string {
 	env := os.Environ()
 	if v := c.readVersion(); v != "" {
-		env = append(env, "DECEPTICON_VERSION="+v)
+		env = append(env, "DECEPTICON_VERSION="+imageTag(v))
 	}
 	return env
 }
@@ -145,7 +145,7 @@ func (c *Compose) DownAndPurge() error {
 func (c *Compose) Pull(version string) error {
 	cmd := exec.Command("docker", append(c.baseArgs(), "pull")...)
 	if version != "" {
-		cmd.Env = append(os.Environ(), "DECEPTICON_VERSION="+version)
+		cmd.Env = append(os.Environ(), "DECEPTICON_VERSION="+imageTag(version))
 	} else {
 		cmd.Env = c.composeEnv()
 	}
@@ -155,6 +155,10 @@ func (c *Compose) Pull(version string) error {
 		return fmt.Errorf("docker compose pull: %w", err)
 	}
 	return nil
+}
+
+func imageTag(version string) string {
+	return strings.TrimPrefix(strings.TrimSpace(version), "v")
 }
 
 // Ps shows service status.
@@ -207,12 +211,20 @@ func (c *Compose) RunInteractive(profiles []string, service string, env map[stri
 	return nil
 }
 
-// CleanScratch removes /workspace/.scratch inside the running sandbox.
-// Best-effort: silently no-ops when the sandbox is not running so a stale
-// scratch directory can be retired without forcing the user to bring the
-// stack up just for cleanup.
+// CleanScratch removes legacy root-level scratch/session directories inside
+// the running sandbox. Current bash tooling writes these directories under
+// each engagement workspace; this cleanup only retires leftovers from older
+// versions.
 func (c *Compose) CleanScratch() {
-	cmd := exec.Command("docker", "exec", "decepticon-sandbox", "rm", "-rf", "/workspace/.scratch")
+	cmd := exec.Command(
+		"docker",
+		"exec",
+		"decepticon-sandbox",
+		"rm",
+		"-rf",
+		"/workspace/.scratch",
+		"/workspace/.sessions",
+	)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	_ = cmd.Run()

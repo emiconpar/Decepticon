@@ -3,16 +3,17 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 func TestParseEnvLine(t *testing.T) {
 	tests := []struct {
-		line      string
-		wantKey   string
-		wantVal   string
-		wantOk    bool
+		line    string
+		wantKey string
+		wantVal string
+		wantOk  bool
 	}{
 		{"KEY=value", "KEY", "value", true},
 		{"KEY=\"quoted value\"", "KEY", "quoted value", true},
@@ -146,16 +147,14 @@ func TestValidateAPIKeys_AcceptsAllProviders(t *testing.T) {
 	}
 }
 
-// TestValidateAuth_OAuthSubscriptions verifies each subscription handler
-// (Gemini Advanced / Copilot Pro / SuperGrok / Perplexity Pro) accepts
-// any of its supported credential surfaces — env token or tokens.json.
-// Mirrors the resolution order in config/<provider>_handler.py.
+// TestValidateAuth_OAuthSubscriptions verifies each custom subscription handler
+// accepts any of its supported credential surfaces — env token or tokens.json.
 func TestValidateAuth_OAuthSubscriptions(t *testing.T) {
 	cases := []struct {
-		toggle      string
-		envName     string
-		configDir   string
-		fileFmt     string
+		toggle    string
+		envName   string
+		configDir string
+		fileFmt   string
 	}{
 		{"DECEPTICON_AUTH_GEMINI", "GEMINI_SESSION_COOKIES", "gemini", "tokens.json"},
 		{"DECEPTICON_AUTH_COPILOT", "COPILOT_REFRESH_TOKEN", "copilot", "tokens.json"},
@@ -198,8 +197,46 @@ func TestValidateAuth_OAuthSubscriptions(t *testing.T) {
 	}
 }
 
+func TestValidateAuth_ChatGPTNativeOAuth(t *testing.T) {
+	t.Run("toggle on allows native device login without session cookie", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		env := map[string]string{"DECEPTICON_AUTH_CHATGPT": "true"}
+		if err := ValidateAuth(env); err != nil {
+			t.Errorf("expected native ChatGPT OAuth to pass without launcher-side token input: %v", err)
+		}
+	})
+
+	t.Run("uses litellm auth.json path", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		got := subscriptionTokenPaths(map[string]string{}, home, oauthSubscriptions["chatgpt"])
+		want := []string{filepath.Join(home, ".config", "litellm", "chatgpt", "auth.json")}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("unexpected ChatGPT token paths: got %v want %v", got, want)
+		}
+	})
+
+	t.Run("custom host token dir uses auth.json", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		customDir := filepath.Join(home, "custom-chatgpt")
+		env := map[string]string{
+			"LITELLM_CHATGPT_TOKEN_DIR": customDir,
+		}
+		got := subscriptionTokenPaths(env, home, oauthSubscriptions["chatgpt"])
+		want := []string{
+			filepath.Join(customDir, "auth.json"),
+			filepath.Join(home, ".config", "litellm", "chatgpt", "auth.json"),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("unexpected custom ChatGPT token paths: got %v want %v", got, want)
+		}
+	})
+}
+
 // TestValidateAuth_OllamaLocal covers issue #106: the user picks
-// ``ollama_local`` and sets OLLAMA_API_BASE, no API key needed. The
+// ollama_local and sets OLLAMA_API_BASE, no API key needed. The
 // previous gate rejected this because it only checked API-key columns.
 func TestValidateAuth_OllamaLocal(t *testing.T) {
 	home := t.TempDir()
@@ -338,7 +375,7 @@ DECEPTICON_MODEL_PROFILE=eco
 	}
 
 	values := map[string]string{
-		"ANTHROPIC_API_KEY":       "sk-real-key",
+		"ANTHROPIC_API_KEY":        "sk-real-key",
 		"DECEPTICON_MODEL_PROFILE": "max",
 	}
 

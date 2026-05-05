@@ -1,4 +1,4 @@
-"""Pipe-pane log moved to /workspace/.sessions/, manager dict is lock-protected."""
+"""Pipe-pane logs are engagement-scoped and manager dict is lock-protected."""
 
 import logging
 import subprocess as _sp
@@ -15,7 +15,7 @@ from decepticon.backends.docker_sandbox import (
 )
 
 
-def test_initialize_pipes_pane_to_workspace_sessions_log():
+def test_initialize_does_not_create_root_workspace_sessions_log():
     mgr = TmuxSessionManager("scan-1", "decepticon-sandbox")
     TmuxSessionManager._initialized.discard("scan-1")
 
@@ -36,15 +36,54 @@ def test_initialize_pipes_pane_to_workspace_sessions_log():
         mock_run.return_value.returncode = 0
         mgr.initialize()
 
+    assert not any(c.args[0][0] == "pipe-pane" for c in mock_tmux.call_args_list)
+    assert not any("mkdir" in (c.args[0] if c.args else []) for c in mock_run.call_args_list)
+
+
+def test_initialize_pipes_pane_to_engagement_scoped_sessions_log():
+    mgr = TmuxSessionManager(
+        "dcptn_test-main",
+        "decepticon-sandbox",
+        workspace_path="/workspace/test",
+        log_name="main",
+    )
+    TmuxSessionManager._initialized.discard("dcptn_test-main")
+
+    with (
+        patch.object(mgr, "_docker_tmux") as mock_tmux,
+        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("time.sleep"),
+    ):
+        mock_tmux.side_effect = [
+            RuntimeError("session not found"),
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+        mock_run.return_value.returncode = 0
+        mgr.initialize()
+
+    new_session_call = next(c for c in mock_tmux.call_args_list if c.args[0][0] == "new-session")
+    new_session_args = new_session_call.args[0]
+    assert new_session_args[new_session_args.index("-c") + 1] == "/workspace/test"
+
     pipe_pane_call = next(c for c in mock_tmux.call_args_list if c.args[0][0] == "pipe-pane")
-    args = pipe_pane_call.args[0]
-    cmd_arg = args[args.index("-o") + 1]
-    assert cmd_arg == "cat >> /workspace/.sessions/scan-1.log"
+    pipe_pane_args = pipe_pane_call.args[0]
+    cmd_arg = pipe_pane_args[pipe_pane_args.index("-o") + 1]
+    assert cmd_arg == "cat >> /workspace/test/.sessions/main.log"
 
 
-def test_initialize_creates_sessions_directory_inside_container():
-    mgr = TmuxSessionManager("scan-2", "decepticon-sandbox")
-    TmuxSessionManager._initialized.discard("scan-2")
+def test_initialize_creates_sessions_directory_inside_engagement_workspace():
+    mgr = TmuxSessionManager(
+        "dcptn_test-scan-2",
+        "decepticon-sandbox",
+        workspace_path="/workspace/test",
+        log_name="scan-2",
+    )
+    TmuxSessionManager._initialized.discard("dcptn_test-scan-2")
 
     with (
         patch.object(mgr, "_docker_tmux") as mock_tmux,
@@ -55,15 +94,25 @@ def test_initialize_creates_sessions_directory_inside_container():
         mock_run.return_value.returncode = 0
         mgr.initialize()
 
-    mkdir_calls = [c for c in mock_run.call_args_list if "mkdir" in (c.args[0] if c.args else [])]
+    mkdir_calls = [
+        c
+        for c in mock_run.call_args_list
+        if "mkdir" in (c.args[0] if c.args else [])
+        and "/workspace/test/.sessions" in (c.args[0] if c.args else [])
+    ]
     assert mkdir_calls, "Expected a docker exec mkdir call"
     cmd = mkdir_calls[0].args[0]
-    assert "/workspace/.sessions" in cmd
+    assert "/workspace/test/.sessions" in cmd
 
 
 def test_initialize_warns_when_mkdir_fails(caplog):
-    mgr = TmuxSessionManager("scan-3", "decepticon-sandbox")
-    TmuxSessionManager._initialized.discard("scan-3")
+    mgr = TmuxSessionManager(
+        "dcptn_test-scan-3",
+        "decepticon-sandbox",
+        workspace_path="/workspace/test",
+        log_name="scan-3",
+    )
+    TmuxSessionManager._initialized.discard("dcptn_test-scan-3")
 
     decepticon_logger = logging.getLogger("decepticon")
     original_propagate = decepticon_logger.propagate
@@ -75,7 +124,7 @@ def test_initialize_warns_when_mkdir_fails(caplog):
             patch("time.sleep"),
         ):
             mock_tmux.side_effect = [RuntimeError("session not found"), "", "", "", "", "", ""]
-            mock_run.side_effect = CalledProcessError(1, ["docker", "exec"])
+            mock_run.side_effect = [None, CalledProcessError(1, ["docker", "exec"])]
             with caplog.at_level(logging.WARNING):
                 mgr.initialize()
     finally:
@@ -130,6 +179,19 @@ def test_read_session_log_diff_returns_full_log_on_first_call():
         diff = sandbox.read_session_log_diff("scan")
 
     assert "line1" in diff and "line3" in diff
+
+
+def test_read_session_log_diff_uses_engagement_workspace_path():
+    sandbox = DockerSandbox(container_name="test")
+
+    with patch.object(sandbox, "download_files") as mock_dl:
+        mock_dl.return_value = [
+            _file_response("/workspace/test/.sessions/scan.log", b"scoped\n"),
+        ]
+        diff = sandbox.read_session_log_diff("scan", workspace_path="/workspace/test")
+
+    assert diff == "scoped\n"
+    mock_dl.assert_called_once_with(["/workspace/test/.sessions/scan.log"])
 
 
 def test_read_session_log_diff_returns_only_new_bytes_on_second_call():
@@ -369,3 +431,58 @@ def test_poll_loop_capture_errors_dont_falsely_trigger_stall_detection():
     # And not [TIMEOUT] either — the loop should have detected completion.
     assert "[TIMEOUT]" not in result, f"Should have completed: {result!r}"
     assert "[ERROR]" not in result, f"Should not have errored: {result!r}"
+
+
+def test_initialize_recreates_stale_cached_pane_without_error_string_matching():
+    mgr = TmuxSessionManager("stale", "decepticon-sandbox")
+    mgr._pane_id = "%old"
+    TmuxSessionManager._initialized.add("stale")
+
+    with (
+        patch.object(mgr, "_docker_tmux") as mock_tmux,
+        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("time.sleep"),
+    ):
+        mock_tmux.side_effect = [
+            RuntimeError("arbitrary tmux target failure"),  # cached pane verification
+            RuntimeError("arbitrary missing session failure"),  # has-session
+            "%new",  # new-session -P -F '#{pane_id}'
+            "",  # send-keys ps1_cmd
+            "",  # send-keys Enter
+            "",  # send-keys C-l
+            "",  # clear-history
+            "",  # pipe-pane
+        ]
+        mock_run.return_value.returncode = 0
+        mgr.initialize()
+
+    assert mgr._pane_id == "%new"
+    assert "stale" in TmuxSessionManager._initialized
+    sent_targets = [c.args[0][2] for c in mock_tmux.call_args_list if c.args[0][0] == "send-keys"]
+    assert "%new" in sent_targets
+
+
+def test_execute_recovers_initial_capture_failure_without_error_string_matching():
+    mgr = TmuxSessionManager("recover", "decepticon-sandbox")
+    mgr._pane_id = "%bad"
+    TmuxSessionManager._initialized.add("recover")
+
+    with (
+        patch.object(mgr, "initialize", return_value=None) as mock_initialize,
+        patch.object(mgr, "_capture") as mock_capture,
+        patch.object(mgr, "_send", return_value=None),
+        patch.object(mgr, "_clear_screen", return_value=None),
+        patch("time.sleep"),
+    ):
+        mock_capture.side_effect = [
+            RuntimeError("arbitrary tmux capture failure"),
+            "[DCPTN:0:/workspace] ",
+            "[DCPTN:0:/workspace] ls\nfile.txt\n[DCPTN:0:/workspace] ",
+        ]
+        result = mgr.execute(command="ls", is_input=False, timeout=2)
+
+    assert mock_initialize.call_count == 2
+    assert mgr._pane_id is None
+    assert "recover" not in TmuxSessionManager._initialized
+    assert "[ERROR]" not in result
+    assert "file.txt" in result

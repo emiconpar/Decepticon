@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/compose"
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/config"
@@ -19,7 +20,7 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	updateCmd.Flags().BoolVarP(&forceUpdate, "force", "f", false, "Force re-pull images even if version unchanged")
+	updateCmd.Flags().BoolVarP(&forceUpdate, "force", "f", false, "Refresh config files and Docker images even if version unchanged")
 	rootCmd.AddCommand(updateCmd)
 }
 
@@ -32,13 +33,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	hasUpdate := updater.CompareVersions(version, release.TagName)
-	if !hasUpdate && !forceUpdate {
+	if !hasUpdate {
 		ui.Success(fmt.Sprintf("Already up to date (%s)", version))
-		return nil
 	}
 
 	if hasUpdate {
 		ui.Info(fmt.Sprintf("Update available: %s → %s", version, release.TagName))
+	} else {
+		ui.Info("Refreshing configuration files and Docker images...")
 	}
 
 	// Load env for branch info
@@ -46,17 +48,20 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	if config.EnvExists() {
 		env, _ = config.LoadEnv(config.EnvPath())
 	}
-	branch := config.Get(env, "DECEPTICON_BRANCH", "main")
+	ref := release.TagName
+	if branch := strings.TrimSpace(env["DECEPTICON_BRANCH"]); branch != "" {
+		ref = branch
+	}
 
 	// Sync config files
 	ui.Info("Syncing configuration files...")
-	if err := updater.SyncConfigFiles(branch); err != nil {
+	if err := updater.SyncConfigFiles(ref); err != nil {
 		ui.Warning("Config sync: " + err.Error())
 	}
 
 	// Pull new images
 	c := compose.New()
-	targetVersion := release.TagName
+	targetVersion := strings.TrimPrefix(release.TagName, "v")
 	ui.Info("Pulling Docker images (" + targetVersion + ")...")
 	if err := c.Pull(targetVersion); err != nil {
 		ui.Warning("Image pull: " + err.Error())

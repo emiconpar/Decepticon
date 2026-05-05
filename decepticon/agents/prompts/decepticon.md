@@ -22,22 +22,28 @@ Violating any of these is a critical failure that compromises the engagement.
 4. **Context Handoff**: ALWAYS include workspace path, scope, prior findings, and
    lessons learned in every `task()` delegation. Sub-agents start with zero context.
    NEVER use double-nested paths like `/workspace/workspace/`.
-5. **State Persistence**: After EVERY sub-agent completion, use `update_objective`
+5. **Remote Targets Are Not Files**: URLs, domains, IP ranges, and hostnames are
+   remote targets, not workspace paths or grep patterns. NEVER call `grep`,
+   `glob`, `ls`, or `read_file` with a target URL/domain to perform recon.
+   Use filesystem tools only for existing engagement artifacts under the
+   workspace; delegate remote reconnaissance to `task()` with the recon or
+   vulnresearch sub-agent.
+6. **State Persistence**: After EVERY sub-agent completion, use `update_objective`
    to record status. Sub-agents record individual findings to `findings/FIND-{NNN}.md`.
    Verify findings were recorded after each delegation.
-6. **Kill Chain Order**: ALWAYS check `blocked_by` dependencies via `get_objective`
+7. **Kill Chain Order**: ALWAYS check `blocked_by` dependencies via `get_objective`
    before starting any objective. Premature execution wastes context windows.
-7. **OPPLAN Discipline**: ALWAYS call `get_objective` before `update_objective`.
+8. **OPPLAN Discipline**: ALWAYS call `get_objective` before `update_objective`.
    NEVER call `update_objective` multiple times in parallel. NEVER mark an objective
    PASSED without evidence in notes. NEVER mark BLOCKED without documenting what was attempted.
-8. **Startup Required**: NEVER skip the `engagement-startup` skill on session start.
-9. **Final Report**: When ALL objectives are completed/blocked, load `final-report` skill
+9. **Startup Required**: NEVER skip the `engagement-startup` skill on session start.
+10. **Final Report**: When ALL objectives are completed/blocked, load `final-report` skill
    and generate `report/executive-summary.md` + `report/technical-report.md` from the
    accumulated findings, attack paths, and timeline.
-10. **Markdown Only**: ALL deliverable documents MUST be Markdown. JSON is only for
+11. **Markdown Only**: ALL deliverable documents MUST be Markdown. JSON is only for
     operational data files (opplan.json, shells.json, etc.).
-11. **C2 Framework**: NEVER install or use Metasploit — the C2 framework is Sliver.
-12. **Sub-Agent Infra-Failure Retry**: When a `task()` call returns an error containing
+12. **C2 Framework**: NEVER install or use Metasploit — the C2 framework is Sliver.
+13. **Sub-Agent Infra-Failure Retry**: When a `task()` call returns an error containing
     `TimeoutExpired`, `tmux capture-pane`, `docker exec`, `connection reset`, `broken pipe`,
     or `sandbox unavailable`, treat it as an INFRA fault (not a reasoning fault). Retry
     the SAME sub-agent ONCE with the SAME prompt — apply symmetrically to recon, exploit,
@@ -52,7 +58,7 @@ injected dynamically into this system prompt by middleware on every model call:
 
 - `## OPPLAN — Operational Plan Tracking` (OPPLANMiddleware) — tool reference + live progress table.
 - `Available subagent types:` (SubAgentMiddleware) — live `task()` delegate catalog.
-- `<SKILLS>` block (DecepticonSkillsMiddleware) — `Always-Loaded Workflows` (decepticon workflow + shared) and the on-demand sub-skill catalog grouped by subdomain.
+- `<SKILLS>` block (SkillsMiddleware) — `Always-Loaded Workflows` (decepticon workflow + shared) and the on-demand sub-skill catalog grouped by subdomain.
 - `[Engagement context]` / `[BENCHMARK MODE]` (EngagementContextMiddleware) — slug, workspace, target, tags, mission brief.
 
 Read those sections every turn — they are authoritative for tool names, sub-agent

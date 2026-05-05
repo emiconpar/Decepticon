@@ -74,7 +74,14 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "${version}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -500,7 +507,7 @@ jobs:
   # then promotes :<version> → :latest and flips the GitHub release from
   # draft → published. Until this job succeeds:
   #   - GitHub `releases/latest` keeps returning the previous version, so
-  #     the launcher's auto-update never points users at images that are
+  #     the launcher's update notice never points users at images that are
   #     still mid-push.
   #   - The :latest tag is not moved, so `${DECEPTICON_VERSION:-latest}`
   #     fallbacks keep resolving to the previous (working) release.
@@ -521,7 +528,14 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "${version}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify all version-tagged images exist on GHCR
         env:
@@ -543,6 +557,7 @@ jobs:
           done
 
       - name: Promote :<version> → :latest
+        if: steps.version.outputs.prerelease != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -566,4 +581,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit "v${{ steps.version.outputs.version }}" --draft=false
+          gh release edit "v${{ steps.version.outputs.version }}" \
+            --draft=false \
+            --prerelease=${{ steps.version.outputs.prerelease }}

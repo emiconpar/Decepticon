@@ -33,30 +33,30 @@ func init() {
 
 // AuthMethod identifiers — must match decepticon/llm/models.py::AuthMethod.
 const (
-	methodAnthropicOAuth   = "anthropic_oauth"
-	methodAnthropicAPI     = "anthropic_api"
-	methodOpenAIOAuth      = "openai_oauth"
-	methodOpenAIAPI        = "openai_api"
-	methodGoogleOAuth      = "google_oauth"
-	methodGoogleAPI        = "google_api"
-	methodMiniMaxAPI       = "minimax_api"
-	methodDeepSeekAPI      = "deepseek_api"
-	methodXAIAPI           = "xai_api"
-	methodGrokOAuth        = "grok_oauth"
-	methodMistralAPI       = "mistral_api"
-	methodOpenRouterAPI    = "openrouter_api"
-	methodNvidiaAPI        = "nvidia_api"
-	methodCopilotOAuth     = "copilot_oauth"
-	methodPerplexityOAuth  = "perplexity_oauth"
-	methodOllamaLocal      = "ollama_local"
+	methodAnthropicOAuth  = "anthropic_oauth"
+	methodAnthropicAPI    = "anthropic_api"
+	methodOpenAIOAuth     = "openai_oauth"
+	methodOpenAIAPI       = "openai_api"
+	methodGoogleOAuth     = "google_oauth"
+	methodGoogleAPI       = "google_api"
+	methodMiniMaxAPI      = "minimax_api"
+	methodDeepSeekAPI     = "deepseek_api"
+	methodXAIAPI          = "xai_api"
+	methodGrokOAuth       = "grok_oauth"
+	methodMistralAPI      = "mistral_api"
+	methodOpenRouterAPI   = "openrouter_api"
+	methodNvidiaAPI       = "nvidia_api"
+	methodCopilotOAuth    = "copilot_oauth"
+	methodPerplexityOAuth = "perplexity_oauth"
+	methodOllamaLocal     = "ollama_local"
 )
 
-// Default Ollama wiring shown to OSS users. ``host.docker.internal``
+// Default Ollama wiring shown to OSS users. `host.docker.internal`
 // is the universal answer regardless of where Ollama runs (macOS host,
 // WSL2 distro, native Linux): from inside Decepticon's containers it
 // resolves to the host network namespace via the
-// ``extra_hosts: [host.docker.internal:host-gateway]`` entry on the
-// litellm service in docker-compose.yml. ``localhost`` is never the
+// `extra_hosts: [host.docker.internal:host-gateway]` entry on the
+// litellm service in docker-compose.yml. `localhost` is never the
 // right answer here — that's the container itself.
 //
 // The host's Ollama must additionally be bound to 0.0.0.0 (the default
@@ -123,7 +123,6 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 		mistralKey             string
 		openrouterKey          string
 		nvidiaKey              string
-		chatgptSessionToken    string
 		geminiSessionCookies   string
 		copilotRefreshToken    string
 		grokSessionToken       string
@@ -199,25 +198,6 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 				Validate(nonEmpty),
 		).Title("2 / 5  ·  Anthropic API").
 			WithHideFunc(func() bool { return !contains(methods, methodAnthropicAPI) }),
-
-		// Step 2b: ChatGPT subscription session token
-		// ChatGPT OAuth has no equivalent of `claude /login` to provision
-		// tokens automatically, so we ask the user to paste the
-		// `__Secure-next-auth.session-token` cookie from a signed-in
-		// chatgpt.com browser session. Optional — users who set
-		// CHATGPT_ACCESS_TOKEN externally or place ~/.config/chatgpt/tokens.json
-		// can leave this blank and skip with Enter.
-		huh.NewGroup(
-			huh.NewNote().
-				Title("ChatGPT Session Token").
-				Description("Open chatgpt.com → DevTools → Application →\nCookies → chatgpt.com → copy the value of\n`__Secure-next-auth.session-token`. Or leave\nblank to use CHATGPT_ACCESS_TOKEN / tokens.json."),
-			huh.NewInput().
-				Title("CHATGPT_SESSION_TOKEN").
-				Placeholder("eyJhbGciOiJ...   (leave blank to skip)").
-				EchoMode(huh.EchoModePassword).
-				Value(&chatgptSessionToken),
-		).Title("2 / 5  ·  ChatGPT OAuth").
-			WithHideFunc(func() bool { return !contains(methods, methodOpenAIOAuth) }),
 
 		// Step 2c: OpenAI API key
 		huh.NewGroup(
@@ -526,9 +506,6 @@ func runOnboard(cmd *cobra.Command, args []string) error {
 	}
 	if nvidiaKey != "" {
 		values["NVIDIA_API_KEY"] = nvidiaKey
-	}
-	if chatgptSessionToken != "" {
-		values["CHATGPT_SESSION_TOKEN"] = chatgptSessionToken
 	}
 	if geminiSessionCookies != "" {
 		values["GEMINI_SESSION_COOKIES"] = geminiSessionCookies

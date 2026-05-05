@@ -11,7 +11,7 @@
 | `decepticon status` | Show service status |
 | `decepticon logs [service]` | Follow service logs (default: `langgraph`) |
 | `decepticon kg-health` | Diagnose the Neo4j knowledge graph |
-| `decepticon update` | Check for updates and apply them |
+| `decepticon update` | Explicitly refresh config files, Docker images, and the launcher binary when a release is available |
 | `decepticon remove` | Uninstall Decepticon completely |
 | `decepticon --version` | Show installed version |
 

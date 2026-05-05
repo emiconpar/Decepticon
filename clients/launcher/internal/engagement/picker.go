@@ -16,9 +16,9 @@ import (
 	"sort"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
@@ -80,6 +80,9 @@ func ScanEngagements(home string) ([]engagementEntry, error) {
 			continue
 		}
 		slug := e.Name()
+		if strings.HasPrefix(slug, ".") {
+			continue
+		}
 		entry := engagementEntry{Slug: slug, Ready: isReady(home, slug)}
 		if entry.Ready {
 			if st, err := os.Stat(filepath.Join(root, slug, "plan", "roe.json")); err == nil {
@@ -343,9 +346,9 @@ func (m pickerModel) refresh() pickerModel {
 
 var (
 	confirmStyle = lipgloss.NewStyle().
-		Padding(0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#ef4444"))
+			Padding(0, 1).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#ef4444"))
 	confirmTextStyle = lipgloss.NewStyle().Bold(true)
 	confirmHintStyle = lipgloss.NewStyle().Faint(true)
 )

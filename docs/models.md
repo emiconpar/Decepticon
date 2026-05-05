@@ -25,7 +25,7 @@ For each agent, Decepticon resolves a tier (from the profile) and walks your Aut
 | `anthropic_api`       | `anthropic/claude-opus-4-7`               | `anthropic/claude-sonnet-4-6`                 | `anthropic/claude-haiku-4-5`                  |
 | `anthropic_oauth`     | `auth/claude-opus-4-7`                    | `auth/claude-sonnet-4-6`                      | `auth/claude-haiku-4-5`                       |
 | `openai_api`          | `openai/gpt-5.5`                          | `openai/gpt-5.4`                              | `openai/gpt-5-nano`                           |
-| `openai_oauth`        | `auth/gpt-5.5`                            | `auth/gpt-5.4`                                | `auth/gpt-5-nano`                             |
+| `openai_oauth`        | `auth/gpt-5.5`                            | `auth/gpt-5.4`                                | `auth/gpt-5.4`                                |
 | `google_api`          | `gemini/gemini-2.5-pro`                   | `gemini/gemini-2.5-flash`                     | `gemini/gemini-2.5-flash-lite`                |
 | `google_oauth`        | `gemini-sub/gemini-2.5-pro`               | `gemini-sub/gemini-2.5-flash`                 | — *(falls through)*                           |
 | `minimax_api`         | `minimax/MiniMax-M2.5`                    | `minimax/MiniMax-M2.5-lightning`              | — *(falls through)*                           |
@@ -54,7 +54,7 @@ Each agent runs at the tier suited to its workload:
 | Tier  | Agents                                                                                          |
 |-------|-------------------------------------------------------------------------------------------------|
 | HIGH  | `decepticon`, `exploiter`, `patcher`, `contract_auditor`, `analyst`, `vulnresearch`              |
-| MID   | `exploit`, `detector`, `verifier`, `postexploit`, `defender`, `ad_operator`, `cloud_hunter`, `reverser` |
+| MID   | `exploit`, `detector`, `verifier`, `postexploit`, `ad_operator`, `cloud_hunter`, `reverser` |
 | LOW   | `soundwave`, `recon`, `scanner`                                                                 |
 
 ### `max` — every agent on HIGH
@@ -292,12 +292,12 @@ startup so you can confirm what got picked up.
 
 ## Subscription OAuth Providers
 
-Use monthly subscriptions instead of per-token API billing. Each subscription has a custom LiteLLM handler that authenticates via OAuth/session tokens.
+Use monthly subscriptions instead of per-token API billing. ChatGPT uses LiteLLM's native ChatGPT provider; the others use custom LiteLLM handlers that authenticate via OAuth/session tokens.
 
 | Subscription | AuthMethod | Models | Handler |
 |---|---|---|---|
 | Claude Max/Pro/Team | `anthropic_oauth` | auth/claude-opus, sonnet, haiku | `claude_code_handler.py` |
-| ChatGPT Pro/Plus/Team | `openai_oauth` | auth/gpt-5.5, gpt-5.4, gpt-5-nano | `chatgpt_handler.py` (via `auth_handler.py` dispatcher) |
+| ChatGPT Pro/Plus/Team | `openai_oauth` | auth/gpt-5.5, gpt-5.4 | LiteLLM native `chatgpt` provider |
 | Gemini Advanced | `google_oauth` | gemini-sub/gemini-2.5-pro, flash | `gemini_handler.py` |
 | Copilot Pro | `copilot_oauth` | copilot/gpt-4o, o1, o3-mini | `copilot_handler.py` |
 | SuperGrok | `grok_oauth` | grok-sub/grok-3, grok-3-mini | `grok_handler.py` |

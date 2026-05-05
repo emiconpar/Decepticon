@@ -203,6 +203,7 @@ wss.on("connection", async (ws: WebSocket, req) => {
     FORCE_COLOR: "1",
     DECEPTICON_ASSISTANT_ID: agentId,
     DECEPTICON_ENGAGEMENT: engagementSlug,
+    DECEPTICON_WORKSPACE_PATH: engagementSlug ? `/workspace/${engagementSlug}` : "/workspace",
     DECEPTICON_API_URL: LANGGRAPH_API_URL,
   };
   if (threadId) env.DECEPTICON_THREAD_ID = threadId;

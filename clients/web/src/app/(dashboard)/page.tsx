@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Crosshair, FileWarning, Shield, AlertTriangle, TrendingUp, ArrowRight } from "lucide-react";
+import { Crosshair, FileWarning, Shield, AlertTriangle, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 
 interface Engagement {
   id: string;
@@ -177,7 +177,7 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Overview of your security testing operations</p>
       </div>
 
-      {/* Metric Cards */}
+      {/* Metric Cards — CTEM style with gradient backgrounds */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metricDefs.map((metric) => (
           <Card

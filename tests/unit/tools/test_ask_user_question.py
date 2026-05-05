@@ -11,7 +11,7 @@ from decepticon.tools.interaction import ask_user_question
 
 # Pydantic constraints expressed in the tool signature; mirrored here so the
 # tests document the contract without re-importing private constants.
-HEADER_MAX_CHARS = 12
+HEADER_MAX_CHARS = 60
 MAX_OPTIONS = 5
 
 
@@ -148,25 +148,62 @@ def test_skips_writer_when_outside_graph_context():
 
 
 def test_truncates_header_longer_than_max():
-    """BeforeValidator auto-truncates header instead of rejecting.
-
-    Local models occasionally pass headers longer than max_length.
-    Truncation keeps the engagement flowing instead of aborting with
-    a Pydantic ValidationError.
-    """
+    captured: list[dict] = []
     too_long = "X" * (HEADER_MAX_CHARS + 10)
+
     with (
         patch(
             "decepticon.tools.interaction.ask_user.get_stream_writer",
-            return_value=lambda _evt: None,
+            return_value=lambda event: captured.append(event),
         ),
         patch(
             "decepticon.tools.interaction.ask_user.interrupt",
             return_value="Yes",
         ),
     ):
-        result = _invoke(header=too_long)
-        assert result == "Yes"
+        assert _invoke(header=too_long) == "Yes"
+
+    assert captured[0]["header"] == "X" * HEADER_MAX_CHARS
+
+
+def test_coerces_options_json_string_from_local_models():
+    options = '[{"label":"External Web (Recommended)","description":"Public website"}]'
+    captured: list[dict] = []
+
+    with (
+        patch(
+            "decepticon.tools.interaction.ask_user.get_stream_writer",
+            return_value=lambda event: captured.append(event),
+        ),
+        patch(
+            "decepticon.tools.interaction.ask_user.interrupt",
+            return_value="External Web (Recommended)",
+        ),
+    ):
+        assert _invoke(options=options) == "External Web (Recommended)"
+
+    assert captured[0]["options"] == [
+        {"label": "External Web (Recommended)", "description": "Public website"}
+    ]
+
+
+def test_coerces_options_python_literal_string_from_local_models():
+    options = "[{'label': 'Recon', 'description': 'Surface level\\nonly'}]"
+    captured: list[dict] = []
+
+    with (
+        patch(
+            "decepticon.tools.interaction.ask_user.get_stream_writer",
+            return_value=lambda event: captured.append(event),
+        ),
+        patch(
+            "decepticon.tools.interaction.ask_user.interrupt",
+            return_value="Recon",
+        ),
+    ):
+        assert _invoke(options=options) == "Recon"
+
+    assert captured[0]["options"] == [{"label": "Recon", "description": "Surface level\nonly"}]
 
 
 def test_accepts_empty_options():

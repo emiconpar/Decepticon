@@ -59,6 +59,9 @@ ALLOWED_DYNAMIC_PROVIDERS = frozenset(
         # calling and is rejected by validate_model_name() with a
         # remediation hint, before reaching this set.
         "ollama_chat",
+        # ``ollama_cloud`` — same ``/api/chat`` tool-calling endpoint but
+        # routed through OLLAMA_CLOUD_API_BASE with OLLAMA_CLOUD_API_KEY.
+        "ollama_cloud",
         # ``auth/`` is listed but rejected by validate() — kept here so
         # the unrecognized-provider error doesn't fire first and
         # confuse the user with a misleading "use custom/<model>" hint.
@@ -248,7 +251,6 @@ _SUBSCRIPTION_ROUTES: dict[str, list[dict[str, Any]]] = {
     "DECEPTICON_AUTH_CHATGPT": [
         {"model_name": "auth/gpt-5.5", "litellm_params": {"model": "chatgpt/gpt-5.5"}},
         {"model_name": "auth/gpt-5.4", "litellm_params": {"model": "chatgpt/gpt-5.4"}},
-        {"model_name": "auth/gpt-5-nano", "litellm_params": {"model": "chatgpt/gpt-5-nano"}},
     ],
     "DECEPTICON_AUTH_GEMINI": [
         {

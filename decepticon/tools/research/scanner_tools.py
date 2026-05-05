@@ -473,13 +473,14 @@ def rank_candidates(shard_results: str, top_k: int = 50) -> str:
         for hit in blob.get("hits", []):
             total += 1
             try:
-                line_no = int(hit.get("line") or 0)
+                line_num = int(hit.get("line", 0))
             except (ValueError, TypeError):
-                line_no = 0
-            key = (hit.get("path", ""), line_no, hit.get("sink_kind", ""))
+                line_num = 0
+            key = (hit.get("path", ""), line_num, hit.get("sink_kind", ""))
             prior = seen.get(key)
             if prior is None or hit.get("score", 0) > prior.get("score", 0):
                 seen[key] = hit
+
     uniq = sorted(seen.values(), key=lambda h: h.get("score", 0), reverse=True)
     return _json(
         {
@@ -530,7 +531,9 @@ def kg_add_candidate(
     props: dict[str, Any] = {
         "key": f"{path}:{line}:{sink_kind}",
         "path": path,
-        "line": int(line),
+        "line": int(line)
+        if isinstance(line, (int, str)) and str(line).lstrip("-").isdigit()
+        else 0,
         "sink_kind": sink_kind,
         "score": float(score),
         "status": "pending",  # detector flips to promoted/rejected

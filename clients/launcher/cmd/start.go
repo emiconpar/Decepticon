@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/PurpleAILAB/Decepticon/clients/launcher/internal/compose"
@@ -106,11 +105,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 		_ = os.Setenv("CLAUDE_CREDENTIALS_VOLUME", "/dev/null")
 	}
 
-	// 2.5. Auto-update check
-	if updater.CheckAndUpdate(version, env) {
-		ui.Info("Restarting with updated binary...")
-		return restartSelf()
-	}
+	// 2.5. Update notice. Applying updates is intentionally explicit via
+	// `decepticon update` because it can replace the binary, compose files,
+	// LiteLLM config, and Docker images.
+	updater.NotifyIfUpdateAvailable(version)
 
 	// 3. Engagement picker — must run BEFORE compose Up so the sandbox
 	// container starts with /workspace bound to the chosen engagement
@@ -171,7 +169,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 }
 
 // probeOllamaIfSelected does a best-effort GET on /api/tags to verify the
-// user's Ollama server is reachable when ``ollama_local`` is configured.
+// user's Ollama server is reachable when `ollama_local` is configured.
 // Failures don't block startup — the user might be about to launch
 // Ollama, or running on an unusual setup we can't introspect. We just
 // surface a hint so they aren't surprised by a 'model not found' on the
@@ -229,11 +227,11 @@ func probeOllamaIfSelected(env map[string]string) {
 // verify host-side Ollama reachability. The returned list is ordered
 // best-first so the loop short-circuits on the most likely candidate.
 //
-// For URLs that don't reference ``host.docker.internal`` the list is
+// For URLs that don't reference `host.docker.internal` the list is
 // just the URL itself — the user wired up an explicit address (real
 // IP, DNS name) and we trust it.
 //
-// For ``host.docker.internal`` the resolution depends on platform:
+// For `host.docker.internal` the resolution depends on platform:
 //
 //   - Always try the URL verbatim first. Docker Desktop on macOS,
 //     Windows, and WSL2 typically populates /etc/hosts with this name.
@@ -242,7 +240,7 @@ func probeOllamaIfSelected(env map[string]string) {
 //     hosts entry, but the Windows host is always the WSL2 default
 //     nameserver, so this catches the "Ollama on Windows" case.
 //   - Always fall back to 127.0.0.1. Native Linux Docker reaches the
-//     host loopback via the ``extra_hosts: host-gateway`` mapping,
+//     host loopback via the `extra_hosts: host-gateway` mapping,
 //     which on the host is just localhost. On WSL this also catches
 //     the "Ollama running inside the WSL distro" case.
 func candidateProbeURLs(raw string) []string {
@@ -283,13 +281,4 @@ func candidateProbeURLs(raw string) []string {
 	}
 	add("127.0.0.1")
 	return candidates
-}
-
-// restartSelf re-execs the current binary after a self-update.
-func restartSelf() error {
-	execPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("get executable: %w", err)
-	}
-	return syscall.Exec(execPath, os.Args, os.Environ())
 }

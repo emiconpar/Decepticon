@@ -32,6 +32,20 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+func TestDisplayVersion(t *testing.T) {
+	tests := map[string]string{
+		"1.0.22":  "v1.0.22",
+		"v1.0.22": "v1.0.22",
+		"dev":     "dev",
+		"":        "",
+	}
+	for input, want := range tests {
+		if got := displayVersion(input); got != want {
+			t.Errorf("displayVersion(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestFetchLatestRelease_Mock(t *testing.T) {
 	release := Release{
 		TagName: "v1.2.0",

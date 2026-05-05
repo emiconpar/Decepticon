@@ -43,3 +43,16 @@ func TestBaseArgs(t *testing.T) {
 		t.Errorf("baseArgs = %v", args)
 	}
 }
+
+func TestImageTag(t *testing.T) {
+	tests := map[string]string{
+		"v1.0.21":  "1.0.21",
+		"1.0.21":   "1.0.21",
+		" latest ": "latest",
+	}
+	for input, want := range tests {
+		if got := imageTag(input); got != want {
+			t.Errorf("imageTag(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

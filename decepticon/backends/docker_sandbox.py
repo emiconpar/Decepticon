@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import functools
+import hashlib
 import io
 import logging
 import os
@@ -55,6 +56,17 @@ MAX_OUTPUT_CHARS: int = 30_000
 AUTO_BACKGROUND_SECONDS: float = 60.0
 SIZE_WATCHDOG_CHARS: int = 5_000_000
 SIZE_WATCHDOG_INTERVAL: float = 5.0
+
+
+class TmuxCommandError(RuntimeError):
+    """Raised when a tmux command fails inside the sandbox container."""
+
+    def __init__(self, args: list[str], returncode: int, output: str) -> None:
+        self.args_list = args
+        self.returncode = returncode
+        self.output = output
+        super().__init__(output)
+
 
 # ─── Semantic exit code interpretation (Claude Code best practice) ────────
 _EXIT_CODE_MESSAGES: dict[int, str] = {
@@ -99,9 +111,18 @@ class TmuxSessionManager:
     _initialized: set[str] = set()
     _init_lock: threading.RLock = threading.RLock()
 
-    def __init__(self, session: str, container_name: str) -> None:
+    def __init__(
+        self,
+        session: str,
+        container_name: str,
+        workspace_path: str = "/workspace",
+        log_name: str | None = None,
+    ) -> None:
         self.session = session
         self._container = container_name
+        self._workspace_path = workspace_path.rstrip("/") or "/workspace"
+        self._log_name = log_name or session
+        self._pane_id: str | None = None
 
     # ── docker / tmux helpers ──
 
@@ -117,34 +138,53 @@ class TmuxSessionManager:
         )
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout
-            # Detect tmux server death or session/pane destruction and invalidate cache
-            if any(
-                sig in error_msg
-                for sig in (
-                    "no server running",
-                    "server exited",
-                    "can't find pane",
-                    "can't find window",
-                    "session not found",
-                    "error connecting to",
-                )
-            ):
-                log.warning("tmux session unavailable (%s) — invalidating caches", error_msg.strip())
-                with TmuxSessionManager._init_lock:
-                    TmuxSessionManager._initialized.clear()
-            raise RuntimeError(error_msg)
+            raise TmuxCommandError(args, result.returncode, error_msg)
         return result.stdout
+
+    def _target(self) -> str:
+        """Return the stable tmux target for command dispatch."""
+        return self._pane_id or self.session
+
+    def _forget_cached_state(self) -> None:
+        self._pane_id = None
+        with TmuxSessionManager._init_lock:
+            TmuxSessionManager._initialized.discard(self.session)
+
+    def _resolve_pane_id(self) -> str:
+        return self._docker_tmux(
+            ["display-message", "-p", "-t", self.session, "#{pane_id}"],
+            timeout=5,
+        ).strip()
+
+    def _cached_pane_is_alive(self) -> bool:
+        if self.session not in TmuxSessionManager._initialized:
+            return False
+        if self._pane_id is None:
+            try:
+                self._pane_id = self._resolve_pane_id()
+            except RuntimeError:
+                return False
+        try:
+            self._docker_tmux(
+                ["display-message", "-p", "-t", self._pane_id, "#{pane_id}"],
+                timeout=5,
+            )
+            return True
+        except RuntimeError:
+            return False
 
     def _send(self, text: str, enter: bool = True) -> None:
         """Send keystrokes using -l (literal) to prevent tmux escaping bugs."""
-        self._docker_tmux(["send-keys", "-t", self.session, "-l", text])
+        target = self._target()
+        self._docker_tmux(["send-keys", "-t", target, "-l", text])
         if enter:
-            self._docker_tmux(["send-keys", "-t", self.session, "Enter"])
+            self._docker_tmux(["send-keys", "-t", target, "Enter"])
 
     def _clear_screen(self) -> None:
-        self._docker_tmux(["send-keys", "-t", self.session, "C-l"])
+        target = self._target()
+        self._docker_tmux(["send-keys", "-t", target, "C-l"])
         time.sleep(0.1)
-        self._docker_tmux(["clear-history", "-t", self.session])
+        self._docker_tmux(["clear-history", "-t", target])
 
     def _capture(self) -> str:
         return self._docker_tmux(
@@ -157,7 +197,7 @@ class TmuxSessionManager:
                 "-E",
                 "-",
                 "-t",
-                self.session,
+                self._target(),
             ]
         )
 
@@ -166,8 +206,10 @@ class TmuxSessionManager:
     def initialize(self) -> None:
         """Create session if needed and inject PS1 marker (once per session)."""
         with TmuxSessionManager._init_lock:
-            if self.session in TmuxSessionManager._initialized:
+            if self._cached_pane_is_alive():
                 return
+            TmuxSessionManager._initialized.discard(self.session)
+            self._pane_id = None
 
         session_exists = False
         try:
@@ -179,13 +221,38 @@ class TmuxSessionManager:
         if not session_exists:
             log.info("Creating tmux session: %s", self.session)
             try:
-                self._docker_tmux(["new-session", "-d", "-s", self.session])
-            except RuntimeError as e:
-                # "duplicate session" — has-session check was stale; session exists
-                if "duplicate session" not in str(e):
+                if self._workspace_path != "/workspace":
+                    subprocess.run(
+                        ["docker", "exec", self._container, "mkdir", "-p", self._workspace_path],
+                        capture_output=True,
+                        timeout=5,
+                        check=True,
+                    )
+                pane_id = self._docker_tmux(
+                    [
+                        "new-session",
+                        "-d",
+                        "-s",
+                        self.session,
+                        "-c",
+                        self._workspace_path,
+                        "-P",
+                        "-F",
+                        "#{pane_id}",
+                    ]
+                ).strip()
+                self._pane_id = pane_id or self.session
+            except RuntimeError:
+                try:
+                    self._docker_tmux(["has-session", "-t", self.session], timeout=5)
+                    self._pane_id = self._resolve_pane_id()
+                    session_exists = True
+                    log.debug("Session %s already exists (race), reusing", self.session)
+                except RuntimeError:
                     raise
-                log.debug("Session %s already exists (race), reusing", self.session)
             time.sleep(0.3)
+        else:
+            self._pane_id = self._resolve_pane_id()
 
         # Inject PS1 marker + disable PS2 + clear screen
         ps1_cmd = "export PROMPT_COMMAND='export PS1=\"[DCPTN:$?:$PWD] \"'; export PS2=''; clear"
@@ -194,13 +261,20 @@ class TmuxSessionManager:
         self._clear_screen()
         time.sleep(0.2)
 
-        if not session_exists:
-            log_path = f"/workspace/.sessions/{self.session}.log"
+        if not session_exists and self._workspace_path != "/workspace":
+            log_path = f"{self._workspace_path}/.sessions/{self._log_name}.log"
             try:
                 # Idempotent — the directory is bind-mounted to the host so
                 # operators can tail the same file the agent reads.
                 subprocess.run(
-                    ["docker", "exec", self._container, "mkdir", "-p", "/workspace/.sessions"],
+                    [
+                        "docker",
+                        "exec",
+                        self._container,
+                        "mkdir",
+                        "-p",
+                        f"{self._workspace_path}/.sessions",
+                    ],
                     capture_output=True,
                     timeout=5,
                     check=True,
@@ -240,32 +314,17 @@ class TmuxSessionManager:
         try:
             baseline = self._capture()
         except RuntimeError as e:
-            error_msg = str(e)
-            if any(
-                sig in error_msg
-                for sig in (
-                    "no server running",
-                    "server exited",
-                    "session not found",
-                    "can't find pane",
-                    "can't find window",
-                    "error connecting to",
+            log.warning("Session '%s' is not ready — attempting recovery: %s", self.session, e)
+            self._forget_cached_state()
+            try:
+                self.initialize()
+                baseline = self._capture()
+            except (RuntimeError, OSError, subprocess.TimeoutExpired) as retry_err:
+                return (
+                    f"[ERROR] Session recovery failed: {retry_err}\n"
+                    f"The tmux session was destroyed or docker is overloaded. "
+                    f"Try using a different session name."
                 )
-            ):
-                log.warning("Session '%s' is dead — attempting recovery", self.session)
-                with TmuxSessionManager._init_lock:
-                    TmuxSessionManager._initialized.discard(self.session)
-                try:
-                    self.initialize()
-                    baseline = self._capture()
-                except (RuntimeError, OSError, subprocess.TimeoutExpired) as retry_err:
-                    return (
-                        f"[ERROR] Session recovery failed: {retry_err}\n"
-                        f"The tmux session was destroyed or docker is overloaded. "
-                        f"Try using a different session name."
-                    )
-            else:
-                return f"[ERROR] Sandbox error: {e}"
         except (OSError, subprocess.TimeoutExpired) as e:
             return (
                 f"[ERROR] Sandbox capture failed: {e}\n"
@@ -276,13 +335,16 @@ class TmuxSessionManager:
         initial_count = len(PS1_PATTERN.findall(baseline))
 
         if command:
-            if is_input:
-                if command in ("C-c", "C-z", "C-d"):
-                    self._docker_tmux(["send-keys", "-t", self.session, command])
+            try:
+                if is_input:
+                    if command in ("C-c", "C-z", "C-d"):
+                        self._docker_tmux(["send-keys", "-t", self._target(), command])
+                    else:
+                        self._send(command, enter=True)
                 else:
                     self._send(command, enter=True)
-            else:
-                self._send(command, enter=True)
+            except RuntimeError as e:
+                return f"[ERROR] Could not send command to session '{self.session}': {e}"
 
         start = time.monotonic()
         prev_screen = baseline
@@ -293,18 +355,12 @@ class TmuxSessionManager:
             try:
                 screen = self._capture()
             except RuntimeError as poll_err:
-                if "no server running" in str(poll_err):
-                    with TmuxSessionManager._init_lock:
-                        TmuxSessionManager._initialized.discard(self.session)
-                    return (
-                        f"[ERROR] tmux session '{self.session}' was destroyed mid-command.\n"
-                        f"The command likely killed the shell process (e.g. pkill bash).\n"
-                        f"Session will auto-recover on next bash() call."
-                    )
-                # Other RuntimeError — keep polling, reset stall timer
-                log.debug("transient RuntimeError in poll loop: %s", poll_err)
-                last_change_time = time.monotonic()
-                continue
+                self._forget_cached_state()
+                return (
+                    f"[ERROR] tmux session '{self.session}' was destroyed mid-command: {poll_err}\n"
+                    f"The command likely killed the shell process (e.g. pkill bash).\n"
+                    f"Session will auto-recover on next bash() call."
+                )
             except (OSError, subprocess.TimeoutExpired) as poll_err:
                 # docker exec stall — keep polling, do not let it trigger stall detection
                 log.debug("transient capture error in poll loop: %s", poll_err)
@@ -335,15 +391,15 @@ class TmuxSessionManager:
                     command[:50],
                 )
                 try:
-                    self._docker_tmux(["send-keys", "-t", self.session, "C-c"])
-                except RuntimeError:
-                    pass
+                    self._docker_tmux(["send-keys", "-t", self._target(), "C-c"])
+                except RuntimeError as interrupt_err:
+                    log.debug("Failed to interrupt oversized tmux command: %s", interrupt_err)
                 output = _extract_interactive_output(screen, baseline)
                 return (
                     f"{_truncate(output).strip()}\n\n"
                     f"[SIZE LIMIT] Output exceeded {SIZE_WATCHDOG_CHARS // 1_000_000}M chars. "
                     f"Command interrupted.\n"
-                    f"Redirect output to a file: command > /workspace/output.txt"
+                    f"Redirect output to a file: command > {self._workspace_path}/output.txt"
                 )
 
             # Stall detection: if screen changed from baseline (program produced
@@ -409,22 +465,17 @@ class TmuxSessionManager:
         try:
             baseline = await asyncio.to_thread(self._capture)
         except RuntimeError as e:
-            error_msg = str(e)
-            if "no server running" in error_msg or "session not found" in error_msg:
-                log.warning("Session '%s' is dead — attempting recovery", self.session)
-                with TmuxSessionManager._init_lock:
-                    TmuxSessionManager._initialized.discard(self.session)
-                try:
-                    await asyncio.to_thread(self.initialize)
-                    baseline = await asyncio.to_thread(self._capture)
-                except (RuntimeError, OSError, subprocess.TimeoutExpired) as retry_err:
-                    return (
-                        f"[ERROR] Session recovery failed: {retry_err}\n"
-                        f"The tmux session was destroyed or docker is overloaded. "
-                        f"Try using a different session name."
-                    )
-            else:
-                return f"[ERROR] Sandbox error: {e}"
+            log.warning("Session '%s' is not ready — attempting recovery: %s", self.session, e)
+            self._forget_cached_state()
+            try:
+                await asyncio.to_thread(self.initialize)
+                baseline = await asyncio.to_thread(self._capture)
+            except (RuntimeError, OSError, subprocess.TimeoutExpired) as retry_err:
+                return (
+                    f"[ERROR] Session recovery failed: {retry_err}\n"
+                    f"The tmux session was destroyed or docker is overloaded. "
+                    f"Try using a different session name."
+                )
         except (OSError, subprocess.TimeoutExpired) as e:
             return (
                 f"[ERROR] Sandbox capture failed: {e}\n"
@@ -435,15 +486,18 @@ class TmuxSessionManager:
         initial_count = len(PS1_PATTERN.findall(baseline))
 
         if command:
-            if is_input:
-                if command in ("C-c", "C-z", "C-d"):
-                    await asyncio.to_thread(
-                        self._docker_tmux, ["send-keys", "-t", self.session, command]
-                    )
+            try:
+                if is_input:
+                    if command in ("C-c", "C-z", "C-d"):
+                        await asyncio.to_thread(
+                            self._docker_tmux, ["send-keys", "-t", self._target(), command]
+                        )
+                    else:
+                        await asyncio.to_thread(self._send, command, True)
                 else:
                     await asyncio.to_thread(self._send, command, True)
-            else:
-                await asyncio.to_thread(self._send, command, True)
+            except RuntimeError as e:
+                return f"[ERROR] Could not send command to session '{self.session}': {e}"
 
         start = time.monotonic()
         prev_screen = baseline
@@ -454,18 +508,12 @@ class TmuxSessionManager:
             try:
                 screen = await asyncio.to_thread(self._capture)
             except RuntimeError as poll_err:
-                if "no server running" in str(poll_err):
-                    with TmuxSessionManager._init_lock:
-                        TmuxSessionManager._initialized.discard(self.session)
-                    return (
-                        f"[ERROR] tmux session '{self.session}' was destroyed mid-command.\n"
-                        f"The command likely killed the shell process (e.g. pkill bash).\n"
-                        f"Session will auto-recover on next bash() call."
-                    )
-                # Other RuntimeError — keep polling, reset stall timer
-                log.debug("transient RuntimeError in poll loop: %s", poll_err)
-                last_change_time = time.monotonic()
-                continue
+                self._forget_cached_state()
+                return (
+                    f"[ERROR] tmux session '{self.session}' was destroyed mid-command: {poll_err}\n"
+                    f"The command likely killed the shell process (e.g. pkill bash).\n"
+                    f"Session will auto-recover on next bash() call."
+                )
             except (OSError, subprocess.TimeoutExpired) as poll_err:
                 # docker exec stall — keep polling, do not let it trigger stall detection
                 log.debug("transient capture error in poll loop: %s", poll_err)
@@ -497,10 +545,10 @@ class TmuxSessionManager:
                 )
                 try:
                     await asyncio.to_thread(
-                        self._docker_tmux, ["send-keys", "-t", self.session, "C-c"]
+                        self._docker_tmux, ["send-keys", "-t", self._target(), "C-c"]
                     )
-                except RuntimeError:
-                    pass
+                except RuntimeError as interrupt_err:
+                    log.debug("Failed to interrupt oversized tmux command: %s", interrupt_err)
                 output = _extract_interactive_output(screen, baseline)
                 return (
                     f"{_truncate(output).strip()}\n\n"
@@ -646,7 +694,7 @@ def _truncate(text: str) -> str:
     return (
         f"{text[:head_chars]}\n\n"
         f"[... {mid_lines} lines / {mid_chars} chars truncated — "
-        f"save full output to file with -oN or redirect (> /workspace/output.txt) "
+        "save full output to file with -oN or redirect to a workspace file "
         f"to preserve complete results ...]\n\n"
         f"{text[-tail_chars:]}"
     )
@@ -665,9 +713,11 @@ class BackgroundJob:
     """
 
     session: str
+    key: str
     command: str
     initial_markers: int
     started_at: float
+    workspace_path: str = "/workspace"
     status: str = "running"  # running | done
     exit_code: int | None = None
     completed_at: float | None = None
@@ -686,33 +736,43 @@ class BackgroundJobTracker:
         self._jobs: dict[str, BackgroundJob] = {}
         self._lock = threading.RLock()
 
-    def register(self, session: str, command: str, initial_markers: int) -> BackgroundJob:
+    def register(
+        self,
+        session: str,
+        command: str,
+        initial_markers: int,
+        key: str | None = None,
+        workspace_path: str = "/workspace",
+    ) -> BackgroundJob:
+        job_key = key or session
         with self._lock:
             job = BackgroundJob(
                 session=session,
+                key=job_key,
+                workspace_path=workspace_path,
                 command=command,
                 initial_markers=initial_markers,
                 started_at=time.monotonic(),
             )
-            self._jobs[session] = job
+            self._jobs[job_key] = job
             return job
 
-    def get(self, session: str) -> BackgroundJob | None:
+    def get(self, session: str, key: str | None = None) -> BackgroundJob | None:
         with self._lock:
-            return self._jobs.get(session)
+            return self._jobs.get(key or session)
 
-    def mark_complete(self, session: str, exit_code: int) -> None:
+    def mark_complete(self, session: str, exit_code: int, key: str | None = None) -> None:
         with self._lock:
-            job = self._jobs.get(session)
+            job = self._jobs.get(key or session)
             if job is None or job.status != "running":
                 return
             job.status = "done"
             job.exit_code = exit_code
             job.completed_at = time.monotonic()
 
-    def mark_consumed(self, session: str) -> None:
+    def mark_consumed(self, session: str, key: str | None = None) -> None:
         with self._lock:
-            job = self._jobs.get(session)
+            job = self._jobs.get(key or session)
             if job is not None:
                 job.consumed = True
 
@@ -724,9 +784,9 @@ class BackgroundJobTracker:
         with self._lock:
             return list(self._jobs.values())
 
-    def remove(self, session: str) -> None:
+    def remove(self, session: str, key: str | None = None) -> None:
         with self._lock:
-            self._jobs.pop(session, None)
+            self._jobs.pop(key or session, None)
 
 
 # ─── DockerSandbox ────────────────────────────────────────────────────────
@@ -758,17 +818,79 @@ class DockerSandbox(BaseSandbox):
         self,
         container_name: str = "decepticon-sandbox",
         default_timeout: int = 120,
+        workspace_path: str = "/workspace",
     ) -> None:
         self._container_name = container_name
         self._default_timeout = default_timeout
+        self._workspace_path = self._normalize_workspace_path(workspace_path)
         self._managers: dict[str, TmuxSessionManager] = {}
         self._managers_lock = threading.RLock()
 
-    def _get_manager(self, session: str) -> TmuxSessionManager:
+    @staticmethod
+    def _normalize_workspace_path(workspace_path: str | None) -> str:
+        path = (workspace_path or "/workspace").strip()
+        if path == "/workspace":
+            return path
+        if not path.startswith("/workspace/"):
+            return "/workspace"
+        path = path.rstrip("/")
+        components = path[len("/workspace/") :].split("/")
+        if any(not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", component) for component in components):
+            return "/workspace"
+        return path
+
+    @staticmethod
+    def _workspace_slug(workspace_path: str) -> str:
+        path = DockerSandbox._normalize_workspace_path(workspace_path)
+        if path == "/workspace":
+            return "root"
+        digest = hashlib.sha1(path.encode("utf-8")).hexdigest()[:8]
+        slug = path.rsplit("/", 1)[-1] or "workspace"
+        safe_slug = re.sub(r"[^a-zA-Z0-9_.-]+", "-", slug).strip("-") or "workspace"
+        return f"{safe_slug}-{digest}"
+
+    def _workspace_key(self, workspace_path: str | None = None) -> str:
+        return self._workspace_slug(workspace_path or self._workspace_path)
+
+    def _manager_key(self, session: str, workspace_path: str) -> str:
+        if self._normalize_workspace_path(workspace_path) == "/workspace":
+            return session
+        return f"{self._workspace_key(workspace_path)}:{session}"
+
+    @staticmethod
+    def _tmux_session_name(session: str, workspace_path: str) -> str:
+        if DockerSandbox._normalize_workspace_path(workspace_path) == "/workspace":
+            return DockerSandbox._safe_session_name(session)
+        workspace_key = DockerSandbox._workspace_slug(workspace_path)
+        safe_session = DockerSandbox._safe_session_name(session)
+        return f"dcptn_{workspace_key}_{safe_session}"
+
+    @staticmethod
+    def _safe_session_name(session: str) -> str:
+        return re.sub(r"[^a-zA-Z0-9_.-]+", "-", session).strip("-") or "main"
+
+    def session_log_path(self, session: str, workspace_path: str | None = None) -> str:
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        return f"{effective_workspace}/.sessions/{self._safe_session_name(session)}.log"
+
+    def _get_manager(
+        self,
+        session: str,
+        workspace_path: str | None = None,
+    ) -> TmuxSessionManager:
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        key = self._manager_key(session, effective_workspace)
+        tmux_session = self._tmux_session_name(session, effective_workspace)
+        log_name = f"{self._safe_session_name(session)}"
         with self._managers_lock:
-            if session not in self._managers:
-                self._managers[session] = TmuxSessionManager(session, self._container_name)
-            return self._managers[session]
+            if key not in self._managers:
+                self._managers[key] = TmuxSessionManager(
+                    tmux_session,
+                    self._container_name,
+                    workspace_path=effective_workspace,
+                    log_name=log_name,
+                )
+            return self._managers[key]
 
     # ── BaseSandbox abstract methods ──────────────────────────────────────
 
@@ -852,30 +974,34 @@ class DockerSandbox(BaseSandbox):
                 )
         return responses
 
-    def read_session_log_diff(self, session: str) -> str:
-        """Return new bytes appended to /workspace/.sessions/<session>.log
+    def read_session_log_diff(self, session: str, workspace_path: str | None = None) -> str:
+        """Return new bytes appended to <workspace>/.sessions/<session>.log
         since the previous call (or the whole file on first call).
 
         Per-process offset tracking only — restart resets to 0 (safe fallback).
         File truncation/rotation also resets to 0.
         """
-        log_path = f"/workspace/.sessions/{session}.log"
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        key = self._manager_key(session, effective_workspace)
+        log_path = self.session_log_path(session, effective_workspace)
         results = self.download_files([log_path])
         if not results or results[0].error or results[0].content is None:
             return ""
         full = results[0].content
         with self._log_offsets_lock:
-            prev_offset = self._log_offsets.get(session, 0)
+            prev_offset = self._log_offsets.get(key, 0)
             if prev_offset > len(full):
                 prev_offset = 0
             new_bytes = full[prev_offset:]
-            self._log_offsets[session] = len(full)
+            self._log_offsets[key] = len(full)
         return new_bytes.decode("utf-8", errors="replace")
 
-    def reset_session_log_offset(self, session: str) -> None:
+    def reset_session_log_offset(self, session: str, workspace_path: str | None = None) -> None:
         """Forget the read offset (used after kill / GC)."""
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        key = self._manager_key(session, effective_workspace)
         with self._log_offsets_lock:
-            self._log_offsets.pop(session, None)
+            self._log_offsets.pop(key, None)
 
     # ── Tmux execution (for bash tool) ───────────────────────────────────
 
@@ -885,6 +1011,7 @@ class DockerSandbox(BaseSandbox):
         session: str = "main",
         timeout: int | None = None,
         is_input: bool = False,
+        workspace_path: str | None = None,
     ) -> str:
         """Tmux-based execution with session persistence and interactive support.
 
@@ -894,7 +1021,7 @@ class DockerSandbox(BaseSandbox):
         - Output truncation for large outputs
         """
         effective = timeout if timeout is not None else self._default_timeout
-        mgr = self._get_manager(session)
+        mgr = self._get_manager(session, workspace_path)
 
         if not command and not is_input:
             return mgr.read_screen()
@@ -911,6 +1038,7 @@ class DockerSandbox(BaseSandbox):
         session: str = "main",
         timeout: int | None = None,
         is_input: bool = False,
+        workspace_path: str | None = None,
     ) -> str:
         """Async tmux execution — cancellable via asyncio.CancelledError.
 
@@ -918,7 +1046,9 @@ class DockerSandbox(BaseSandbox):
         (Ctrl+C → cancelMany) interrupts the polling loop promptly.
         """
         effective = timeout if timeout is not None else self._default_timeout
-        mgr = self._get_manager(session)
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        job_key = self._manager_key(session, effective_workspace)
+        mgr = self._get_manager(session, effective_workspace)
 
         if not command and not is_input:
             return await asyncio.to_thread(mgr.read_screen)
@@ -928,6 +1058,8 @@ class DockerSandbox(BaseSandbox):
                 session,
                 command=cmd,
                 initial_markers=len(PS1_PATTERN.findall(baseline)),
+                key=job_key,
+                workspace_path=effective_workspace,
             )
 
         return await mgr.execute_async(
@@ -937,30 +1069,49 @@ class DockerSandbox(BaseSandbox):
             on_auto_background=_on_auto_background,
         )
 
-    def start_background(self, command: str, session: str = "main") -> None:
+    def start_background(
+        self,
+        command: str,
+        session: str = "main",
+        workspace_path: str | None = None,
+    ) -> None:
         """Launch a command in a named tmux session without blocking.
 
         Registers a BackgroundJob keyed by the PS1-marker count at launch;
         ``poll_completion`` later compares against this baseline.
         """
-        mgr = self._get_manager(session)
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        job_key = self._manager_key(session, effective_workspace)
+        mgr = self._get_manager(session, effective_workspace)
         mgr.initialize()
         baseline = mgr._capture()
         initial_markers = len(PS1_PATTERN.findall(baseline))
-        self._jobs.register(session, command=command, initial_markers=initial_markers)
+        self._jobs.register(
+            session,
+            command=command,
+            initial_markers=initial_markers,
+            key=job_key,
+            workspace_path=effective_workspace,
+        )
         mgr._send(command, enter=True)
 
-    def poll_completion(self, session: str) -> "BackgroundJob | None":
+    def poll_completion(
+        self,
+        session: str,
+        workspace_path: str | None = None,
+    ) -> "BackgroundJob | None":
         """Check whether a background job has produced a new PS1 marker.
 
         Updates the tracker in place; returns the job (or None if not tracked).
         Capture failures are swallowed — the job stays running, retried later.
         """
-        job = self._jobs.get(session)
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        job_key = self._manager_key(session, effective_workspace)
+        job = self._jobs.get(session, key=job_key)
         if job is None or job.status != "running":
             return job
         try:
-            mgr = self._get_manager(session)
+            mgr = self._get_manager(session, effective_workspace)
             screen = mgr._capture()
         except (RuntimeError, OSError, subprocess.TimeoutExpired):
             return job
@@ -970,32 +1121,36 @@ class DockerSandbox(BaseSandbox):
                 exit_code = int(markers[-1].group(1))
             except ValueError:
                 exit_code = -1
-            self._jobs.mark_complete(session, exit_code=exit_code)
+            self._jobs.mark_complete(session, exit_code=exit_code, key=job_key)
         return job
 
-    def kill_session(self, session: str) -> None:
+    def kill_session(self, session: str, workspace_path: str | None = None) -> None:
         """Send Ctrl+C, then kill the tmux session, then clear all caches.
 
         Best-effort: errors are logged, not raised. The pipe-pane log file
-        is preserved at /workspace/.sessions/<session>.log for audit.
+        is preserved at <engagement>/.sessions/<session>.log for audit.
         """
+        effective_workspace = self._normalize_workspace_path(workspace_path or self._workspace_path)
+        manager_key = self._manager_key(session, effective_workspace)
+        mgr: TmuxSessionManager | None = None
         try:
-            mgr = self._get_manager(session)
+            mgr = self._get_manager(session, effective_workspace)
             try:
-                mgr._docker_tmux(["send-keys", "-t", session, "C-c"])
+                mgr._docker_tmux(["send-keys", "-t", mgr.session, "C-c"])
             except RuntimeError as e:
                 log.debug("send-keys C-c failed for '%s': %s", session, e)
             try:
-                mgr._docker_tmux(["kill-session", "-t", session])
+                mgr._docker_tmux(["kill-session", "-t", mgr.session])
             except RuntimeError as e:
                 log.warning("kill-session failed for '%s': %s", session, e)
         finally:
             with self._managers_lock:
-                self._managers.pop(session, None)
-            with TmuxSessionManager._init_lock:
-                TmuxSessionManager._initialized.discard(session)
-            self.reset_session_log_offset(session)
-            self._jobs.remove(session)
+                self._managers.pop(manager_key, None)
+            if mgr is not None:
+                with TmuxSessionManager._init_lock:
+                    TmuxSessionManager._initialized.discard(mgr.session)
+            self.reset_session_log_offset(session, effective_workspace)
+            self._jobs.remove(session, key=manager_key)
 
 
 # ─── Pre-flight check ────────────────────────────────────────────────────

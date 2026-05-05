@@ -42,18 +42,9 @@ from decepticon.core.schemas import (
     OpsecLevel,
 )
 
-# ── Reducer helpers ───────────────────────────────────────────────────
-
 
 def _reduce_engagement_name(current: str | None, update: str | None) -> str | None:
-    """Reducer for ``engagement_name`` — last non-None writer wins.
-
-    Both OPPLANState and EngagementContextState define ``engagement_name``.
-    When multiple tools or middleware write to this key in the same graph
-    step, LangGraph requires a reducer to reconcile the values. The reducer
-    prefers the latest non-None value, which matches the "set once" semantics
-    of this field.
-    """
+    """Merge concurrent launcher/tool writes to the stable engagement slug."""
     return update if update is not None else current
 
 
@@ -71,7 +62,7 @@ class OPPLANState(AgentState):
     objectives: Annotated[NotRequired[list[dict]], OmitFromInput]
     """List of OPPLAN objectives in dict form (serialized Objective models)."""
 
-    engagement_name: Annotated[NotRequired[str], _reduce_engagement_name, OmitFromInput]
+    engagement_name: NotRequired[Annotated[str, OmitFromInput, _reduce_engagement_name]]
     """Current engagement name for context."""
 
     threat_profile: Annotated[NotRequired[str], OmitFromInput]
@@ -1270,18 +1261,14 @@ class OPPLANMiddleware(AgentMiddleware):
 
         # Block parallel state-mutating calls (add + update both write objectives)
         mutating_calls = [
-            tc
-            for tc in last_ai.tool_calls
-            if tc["name"]
-            in ("add_objective", "update_objective", "objective_expand", "objective_collapse")
+            tc for tc in last_ai.tool_calls if tc["name"] in ("add_objective", "update_objective")
         ]
         if len(mutating_calls) > 1:
             return {
                 "messages": [
                     ToolMessage(
                         content=(
-                            "Error: OPPLAN state-mutating tools (add_objective, update_objective, "
-                            "objective_expand, objective_collapse) "
+                            "Error: OPPLAN state-mutating tools (add_objective, update_objective) "
                             "must be called one at a time, not in parallel. Each call needs "
                             "the updated objectives list. Call one, wait for the result, "
                             "then call the next."

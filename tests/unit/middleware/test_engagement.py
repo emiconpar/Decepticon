@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from langchain.agents import AgentState
+from langchain.agents.factory import _resolve_schemas
 from langchain_core.messages import SystemMessage
+from langgraph.graph import END, START, StateGraph
 
-from decepticon.middleware.engagement_context import (
+from decepticon.middleware.engagement import (
     EngagementContextMiddleware,
+    EngagementContextState,
     _benchmark_mode_active,
 )
+from decepticon.middleware.opplan import OPPLANState
 
 
 class _FakeRequest:
@@ -75,6 +80,34 @@ def test_benchmark_mode_active_falsy(monkeypatch: pytest.MonkeyPatch, value: str
 def test_benchmark_mode_active_unset() -> None:
     # autouse fixture deletes the env; must be False.
     assert _benchmark_mode_active() is False
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        OPPLANState,
+        EngagementContextState,
+        _resolve_schemas({AgentState, OPPLANState, EngagementContextState})[0],
+    ],
+)
+def test_engagement_name_reducer_handles_concurrent_updates(schema) -> None:
+    def set_name(_state):
+        return {"engagement_name": "demo-engagement"}
+
+    def keep_name(_state):
+        return {"engagement_name": None}
+
+    graph = StateGraph(schema)
+    graph.add_node("set_name", set_name)
+    graph.add_node("keep_name", keep_name)
+    graph.add_edge(START, "set_name")
+    graph.add_edge(START, "keep_name")
+    graph.add_edge("set_name", END)
+    graph.add_edge("keep_name", END)
+
+    result = graph.compile().invoke({"messages": []})
+
+    assert result["engagement_name"] == "demo-engagement"
 
 
 # ── inject paths ───────────────────────────────────────────────────────

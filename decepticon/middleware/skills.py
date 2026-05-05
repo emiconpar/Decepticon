@@ -1,4 +1,4 @@
-"""Decepticon Skills Middleware — red-team-aware skill system.
+"""SkillsMiddleware — red-team-aware skill system.
 
 Subclasses the Deep Agents SkillsMiddleware to provide:
 
@@ -21,14 +21,14 @@ Subclasses the Deep Agents SkillsMiddleware to provide:
    every session with the agent-level workflow (phases, scope rules, handoff
    format) loaded — no relying on the model to issue ``read_file`` first.
 
-This middleware replaces BOTH the old `skills.md` shared prompt fragment AND
+This middleware replaces BOTH the old shared skill prompt fragment AND
 the base middleware's generic `SKILLS_SYSTEM_PROMPT`. All skill instructions
 are consolidated here.
 
 Usage:
-    from decepticon.middleware.skills import DecepticonSkillsMiddleware
+    from decepticon.middleware.skills import SkillsMiddleware
 
-    middleware = DecepticonSkillsMiddleware(
+    middleware = SkillsMiddleware(
         backend=backend,
         sources=["/skills/recon/", "/skills/shared/"],
     )
@@ -41,7 +41,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from deepagents.middleware._utils import append_to_system_message
-from deepagents.middleware.skills import SkillsMiddleware
+from deepagents.middleware.skills import SkillsMiddleware as BaseSkillsMiddleware
 from langchain_core.tools import tool
 
 _log = logging.getLogger("decepticon.middleware.skills")
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 
 # ── Decepticon skill system prompt template ──────────────────────────────────
-# Replaces both the shared `skills.md` fragment and the base middleware's
+# Replaces both the old shared skill prompt fragment and the base middleware's
 # generic SKILLS_SYSTEM_PROMPT. Placeholders:
 #   {skills_locations} — `**Decepticon Skills**: /skills/recon/` style headers
 #   {workflow}         — full body of <source>/workflow.md files (auto-loaded)
@@ -130,7 +130,7 @@ when a specialized skill exists is a critical failure.
 _WORKFLOW_FILENAME = "workflow.md"
 
 
-class DecepticonSkillsMiddleware(SkillsMiddleware):
+class SkillsMiddleware(BaseSkillsMiddleware):
     """Red-team-aware skill middleware with phase grouping and MITRE ATT&CK tags.
 
     Subclasses the base SkillsMiddleware to provide:
@@ -480,4 +480,4 @@ def _build_load_skill_tool(backend: Any):  # type: ignore[no-untyped-def]
     return load_skill
 
 
-__all__ = ["DecepticonSkillsMiddleware"]
+__all__ = ["SkillsMiddleware"]

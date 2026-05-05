@@ -58,7 +58,7 @@ func CompareVersions(current, latest string) bool {
 	current = strings.TrimPrefix(current, "v")
 	latest = strings.TrimPrefix(latest, "v")
 	if current == "dev" || current == "" {
-		return false // Don't auto-update dev builds
+		return false // Dev builds do not track published releases.
 	}
 	return compareSemver(current, latest) < 0
 }
@@ -89,8 +89,8 @@ func compareSemver(a, b string) int {
 func SyncConfigFiles(branch string) error {
 	home := config.DecepticonHome()
 	files := map[string]string{
-		"docker-compose.yml":   filepath.Join(home, "docker-compose.yml"),
-		"config/litellm.yaml":  filepath.Join(home, "config", "litellm.yaml"),
+		"docker-compose.yml":  filepath.Join(home, "docker-compose.yml"),
+		"config/litellm.yaml": filepath.Join(home, "config", "litellm.yaml"),
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -189,45 +189,28 @@ func WriteVersion(version string) error {
 	return os.WriteFile(versionFile, []byte(strings.TrimPrefix(version, "v")), 0o644)
 }
 
-// CheckAndUpdate performs auto-update check. Returns true if update was applied.
-//
-// Update order is binary-first, then config files. If the binary update fails
-// we abort entirely so we never end up with new compose/litellm files driving
-// an old launcher (which has caused breakage in past releases when image
-// tags or compose schema changed). If config sync fails after a successful
-// binary update we keep the new binary and leave .version unwritten so the
-// next launch retries config sync.
-func CheckAndUpdate(currentVersion string, env map[string]string) bool {
-	if config.Get(env, "AUTO_UPDATE", "true") == "false" {
-		return false
-	}
-
+// NotifyIfUpdateAvailable checks GitHub releases and prints a non-blocking
+// update notice. It never mutates the binary, config files, or Docker images;
+// users apply updates explicitly with `decepticon update`.
+func NotifyIfUpdateAvailable(currentVersion string) bool {
 	release, err := FetchLatestRelease()
 	if err != nil {
-		return false // Silent fail for auto-update
+		return false // Silent fail; startup should not depend on GitHub.
 	}
 
 	if !CompareVersions(currentVersion, release.TagName) {
 		return false
 	}
 
-	ui.Info(fmt.Sprintf("Update available: %s → %s", currentVersion, release.TagName))
-
-	if err := SelfUpdate(release); err != nil {
-		ui.Warning("Self-update failed: " + err.Error())
-		return false
-	}
-
-	// Use release tag for config files to avoid main branch drift
-	ref := release.TagName // e.g., "v1.0.7"
-	if err := SyncConfigFiles(ref); err != nil {
-		ui.Warning("Binary updated but config sync failed: " + err.Error())
-		ui.Warning("Run 'decepticon update' to retry config sync.")
-		// Do not WriteVersion — leaving .version stale lets the next run
-		// retry the sync via this same code path.
-		return true
-	}
-
-	_ = WriteVersion(release.TagName)
+	ui.Info(fmt.Sprintf("Update available: %s -> %s", displayVersion(currentVersion), release.TagName))
+	ui.DimText("Run `decepticon update` to upgrade.")
 	return true
+}
+
+func displayVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" || version == "dev" || strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
 }

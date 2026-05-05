@@ -320,24 +320,16 @@ Use your ChatGPT Pro, Plus, or Team subscription instead of OpenAI API billing.
 
 | Tier | Models Available (via `auth/gpt-5.x` route) |
 |------|--------------------------------------------|
-| ChatGPT Plus ($20/mo) | `auth/gpt-5.5`, `auth/gpt-5.4`, `auth/gpt-5-nano` |
-| ChatGPT Pro ($200/mo) | `auth/gpt-5.5`, `auth/gpt-5.4`, `auth/gpt-5-nano` |
-| ChatGPT Team | `auth/gpt-5.5`, `auth/gpt-5.4`, `auth/gpt-5-nano` + admin controls |
+| ChatGPT Plus ($20/mo) | `auth/gpt-5.5`, `auth/gpt-5.4` |
+| ChatGPT Pro ($200/mo) | `auth/gpt-5.5`, `auth/gpt-5.4` |
+| ChatGPT Team | `auth/gpt-5.5`, `auth/gpt-5.4` + admin controls |
 
 **Setup:**
 
-1. Extract your session token from the browser:
-
-   - Log into [chatgpt.com](https://chatgpt.com)
-   - Open Developer Tools (F12) → Application → Cookies
-   - Find the cookie named `__Secure-next-auth.session-token`
-   - Copy its full value
-
-2. Configure Decepticon:
+1. Configure Decepticon:
 
 ```bash
 decepticon onboard
-# Select: ChatGPT Sub
 # Select: ChatGPT
 # Select: Profile (eco/max/test)
 ```
@@ -346,10 +338,9 @@ Or edit `~/.decepticon/.env`:
 
 ```bash
 DECEPTICON_AUTH_CHATGPT=true
-CHATGPT_SESSION_TOKEN=eyJ...your-session-token...
 ```
 
-3. Launch:
+2. Launch:
 
 ```bash
 decepticon
@@ -357,26 +348,20 @@ decepticon
 
 **How it works:**
 
-- The unified `auth/` provider dispatcher routes ChatGPT-subscription model
-  names (`auth/gpt-5.5`, `auth/gpt-5.4`, `auth/gpt-5-nano`) through
-  `chatgpt_handler.py`, while `auth/claude-*` continues to flow through
-  `claude_code_handler.py`. This avoids the native LiteLLM `chatgpt`
-  provider whose Codex device-code OAuth would otherwise fire at proxy
-  startup.
-- The handler exchanges the session token for an access token via `chatgpt.com/api/auth/session`
-- Requests hit `api.openai.com/v1/chat/completions` with the subscription Bearer token
-- Access tokens are cached and refreshed automatically
-
-**Alternative token sources (in priority order):**
-
-1. `CHATGPT_ACCESS_TOKEN` env var — pre-extracted Bearer token
-2. `CHATGPT_SESSION_TOKEN` env var — browser session cookie
-3. `~/.config/chatgpt/tokens.json` — persisted token file
+- Decepticon exposes ChatGPT subscription models as `auth/gpt-5.5`
+  and `auth/gpt-5.4`.
+- LiteLLM dynamic config maps those aliases to LiteLLM's native
+  `chatgpt/gpt-*` provider routes only when `DECEPTICON_AUTH_CHATGPT=true`.
+- `docker-compose.yml` mounts the host token directory into the LiteLLM
+  container at `/root/.config/litellm/chatgpt`.
+- Access tokens are handled by LiteLLM's native ChatGPT provider. It stores
+  OAuth credentials in `~/.config/litellm/chatgpt/auth.json` and refreshes
+  them as needed.
 
 **Custom token path:**
 
 ```bash
-CHATGPT_TOKENS_PATH=/custom/path/tokens.json
+LITELLM_CHATGPT_TOKEN_DIR=/custom/host/token/dir
 ```
 
 ---
@@ -472,7 +457,7 @@ Complete list of all supported LLM providers and their pre-configured models:
 |----------|--------|-----------|------|
 | **Subscriptions (OAuth — no API billing)** | | | |
 | Claude Max/Pro/Team | Opus, Sonnet, Haiku | OAuth | $20–$100/mo |
-| ChatGPT Pro/Plus/Team | `auth/gpt-5.5`, `auth/gpt-5.4`, `auth/gpt-5-nano` | OAuth | $20–$200/mo |
+| ChatGPT Pro/Plus/Team | `auth/gpt-5.5`, `auth/gpt-5.4` | OAuth | $20–$200/mo |
 | Gemini Advanced | Gemini 2.5 Pro/Flash | OAuth | $20/mo |
 | Copilot Pro | `copilot/gpt-4o`, `copilot/o1`, `copilot/o3-mini` | OAuth | $20/mo |
 | SuperGrok | Grok-3, Grok-3 Mini | OAuth | X Premium+ |
@@ -575,7 +560,7 @@ decepticon onboard --reset  # Re-run setup from scratch
 decepticon stop             # Stop all services, keep data
 decepticon status           # Show running services
 decepticon logs [service]   # Follow service logs
-decepticon update           # Check for and apply updates
+decepticon update           # Explicitly refresh config/images and upgrade when available
 decepticon remove           # Uninstall Decepticon completely
 decepticon --version        # Show installed version
 ```
@@ -717,8 +702,7 @@ Decepticon (Orchestrator)
 │   ├── Exploit → initial access, payload delivery
 │   ├── Post-Exploit → privesc, lateral movement, C2
 │   ├── AD Operator → Active Directory attack chains
-│   ├── Cloud Hunter → cloud infrastructure attacks
-│   └── Defender → Offensive Vaccine (attack→defend→verify)
+│   └── Cloud Hunter → cloud infrastructure attacks
 ├── Tracks progress in Neo4j knowledge graph
 ├── Adapts strategy based on findings
 └── Generates final report via Analyst agent
@@ -858,13 +842,12 @@ claude login
 cat ~/.claude/.credentials.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('OK' if d.get('claudeAiOauth',{}).get('accessToken','').startswith('sk-ant-oat01-') else 'MISSING')"
 ```
 
-**ChatGPT OAuth: "session token exchange failed"**
+**ChatGPT OAuth: missing or expired auth**
 
-The session token expires periodically. Re-extract from browser:
-
-1. Log into chatgpt.com
-2. DevTools → Application → Cookies → `__Secure-next-auth.session-token`
-3. Update `~/.decepticon/.env` with the new value
+LiteLLM's native ChatGPT provider stores credentials at
+`~/.config/litellm/chatgpt/auth.json`. If the file is missing or expired,
+restart Decepticon and follow the ChatGPT device-code login instructions shown
+in the LiteLLM logs.
 
 **API Key: "401 Unauthorized"**
 

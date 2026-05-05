@@ -67,6 +67,24 @@ func TestScanEngagements_ReadyAndInProgress(t *testing.T) {
 	}
 }
 
+func TestScanEngagements_IgnoresHiddenWorkspaceDirs(t *testing.T) {
+	home := t.TempDir()
+	mkBareDir(t, home, "visible-engagement")
+	mkBareDir(t, home, ".sessions")
+	mkBareDir(t, home, ".scratch")
+
+	got, err := ScanEngagements(home)
+	if err != nil {
+		t.Fatalf("ScanEngagements: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 visible engagement, got %d (%v)", len(got), got)
+	}
+	if got[0].Slug != "visible-engagement" {
+		t.Fatalf("expected visible-engagement, got %q", got[0].Slug)
+	}
+}
+
 func TestScanEngagements_ReadyEngagementsBubbleUp(t *testing.T) {
 	home := t.TempDir()
 	now := time.Now()

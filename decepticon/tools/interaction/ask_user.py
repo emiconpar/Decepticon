@@ -24,64 +24,44 @@ from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
-# ── Argument coercers (resilience for local models) ───────────────────
+HEADER_MAX_CHARS = 60
 
 
-def _coerce_options_list(v: Any) -> list[Any]:
-    """Coerce malformed ``options`` argument into a list.
-
-    Local models (Ollama, etc.) occasionally produce:
-    - A JSON *string* instead of a JSON *array* for the options list
-    - A Python-syntax string ``[{'label': ..., 'description': ...}]``
-      (single quotes, unescaped newlines) from WebUI/the CLI
-    - A single ``QuestionOption`` dict instead of a list of them
-
-    Silently normalising these patterns keeps the engagement flow alive
-    instead of dropping into a bare ``ask_user_question`` error loop.
-    """
-    if isinstance(v, list):
-        return v
-    if isinstance(v, str):
-        # Try JSON first (double-quote syntax from well-behaved models).
-        try:
-            parsed = json.loads(v)
-            if isinstance(parsed, list):
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-        # Try Python literal syntax (single-quote dicts, unescaped newlines
-        # from the CLI / WebUI message formatting).
-        try:
-            parsed = ast.literal_eval(v)
-            if isinstance(parsed, list):
-                return parsed
-        except (ValueError, SyntaxError, TypeError, MemoryError):
-            pass
-        # Last resort: strip unescaped newlines and retry JSON.
-        # Some WebUI renderers emit literal newlines inside JSON strings.
-        try:
-            cleaned = v.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
-            parsed = json.loads(cleaned)
-            if isinstance(parsed, list):
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-        # Unparseable string → empty list; the picker still works via
-        # free-text Other fallback.
+def _coerce_options_list(value: Any) -> list[Any]:
+    """Normalize common local-model shapes for ``options``."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    if not isinstance(value, str):
         return []
-    if isinstance(v, dict):
-        return [v]
+
+    for parser in (json.loads, ast.literal_eval):
+        try:
+            parsed = parser(value)
+        except (json.JSONDecodeError, ValueError, SyntaxError, TypeError, MemoryError):
+            continue
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            return [parsed]
+
+    try:
+        cleaned = value.replace("\r\n", "\\n").replace("\r", "\\n").replace("\n", "\\n")
+        parsed = json.loads(cleaned)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        return [parsed]
     return []
 
 
-def _truncate_header(v: str) -> str:
-    """Auto-truncate ``header`` to ``max_length=12`` instead of erroring."""
-    if isinstance(v, str) and len(v) > 12:
-        return v[:12]
-    return v
-
-
-# ── Option model ──────────────────────────────────────────────────────
+def _truncate_header(value: Any) -> Any:
+    if isinstance(value, str) and len(value) > HEADER_MAX_CHARS:
+        return value[:HEADER_MAX_CHARS]
+    return value
 
 
 class QuestionOption(BaseModel):
@@ -114,8 +94,8 @@ def ask_user_question(
         str,
         BeforeValidator(_truncate_header),
         Field(
-            max_length=12,
-            description="Short label (≤12 chars) shown as the picker's compact chrome label.",
+            max_length=HEADER_MAX_CHARS,
+            description="Short label (≤60 chars) shown as the picker's compact chrome label.",
         ),
     ],
     options: Annotated[
@@ -148,7 +128,7 @@ def ask_user_question(
 
     Args:
         question: The full question text shown to the operator.
-        header: ≤12-char label for the picker chrome.
+        header: ≤60-char label for the picker chrome.
         options: 2–5 entries, each ``{label, description}``.
         multi_select: If True, the operator may pick multiple options and the
             return value is ``list[str]``.

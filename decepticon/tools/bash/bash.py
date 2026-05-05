@@ -10,7 +10,7 @@ Context engineering: multi-tier output management
 Inspired by Claude Code's bash tool best practices:
 
 1. INLINE (≤15K chars) — returned directly in tool result
-2. OFFLOAD (15K–100K chars) — saved to /workspace/.scratch/, summary returned
+2. OFFLOAD (15K–100K chars) — saved to <engagement>/.scratch/, summary returned
 3. HARD_LIMIT (>5M chars) — size watchdog in sandbox kills the command
 
 Additional post-processing:
@@ -22,11 +22,15 @@ Additional post-processing:
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import contextvars
 import hashlib
 import logging
+import os
 import re
 import time
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from decepticon.backends.docker_sandbox import DockerSandbox, _interpret_exit_code
@@ -34,18 +38,22 @@ from decepticon.backends.docker_sandbox import DockerSandbox, _interpret_exit_co
 log = logging.getLogger("decepticon.tools.bash.bash")
 
 _sandbox: DockerSandbox | None = None
+_current_workspace_path: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "decepticon_bash_workspace_path",
+    default="/workspace",
+)
 
 # ─── Output size thresholds ──────────────────────────────────────────────
-INLINE_LIMIT = 15_000  # ≤15K chars: return inline; >15K: offload to /workspace/.scratch/
+INLINE_LIMIT = 15_000  # ≤15K chars: return inline; >15K: offload to <engagement>/.scratch/
 # >5M: size watchdog in docker_sandbox.py kills the command (SIZE_WATCHDOG_CHARS)
 
-# ─── Scratch-file TTL prune (bounds /workspace/.scratch/ growth) ──────────
+# ─── Scratch-file TTL prune (bounds <engagement>/.scratch/ growth) ────────
 # Files persist long enough for the agent's grep/read multi-pass workflow,
 # then expire so the dir does not grow unboundedly across long engagements.
 # Process-level throttle keeps the prune off the hot path of every bash call.
 SCRATCH_TTL_MINUTES = 60
 SCRATCH_PRUNE_INTERVAL = 600  # seconds between prune attempts (per process)
-_last_scratch_prune: float = 0.0
+_scratch_prune_state: dict[str, float] = {}
 
 # ─── ANSI escape code pattern ────────────────────────────────────────────
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]")
@@ -129,24 +137,63 @@ def get_sandbox() -> DockerSandbox | None:
     return _sandbox
 
 
-async def _prune_old_scratch() -> None:
+def _workspace_path_from_config(config: RunnableConfig | None) -> str:
+    configurable = (config or {}).get("configurable", {})
+    workspace = configurable.get("workspace_path") if isinstance(configurable, dict) else None
+    if isinstance(workspace, str) and workspace.startswith("/workspace"):
+        normalized = DockerSandbox._normalize_workspace_path(workspace)
+        if normalized != "/workspace":
+            return normalized
+
+    env_workspace = os.environ.get("DECEPTICON_WORKSPACE_PATH")
+    if env_workspace:
+        normalized = DockerSandbox._normalize_workspace_path(env_workspace)
+        if normalized != "/workspace":
+            return normalized
+
+    env_slug = os.environ.get("DECEPTICON_ENGAGEMENT")
+    if env_slug:
+        normalized = DockerSandbox._normalize_workspace_path(f"/workspace/{env_slug}")
+        if normalized != "/workspace":
+            return normalized
+
+    return _current_workspace_path.get()
+
+
+def _with_workspace_kwargs(workspace_path: str) -> dict[str, str]:
+    if workspace_path == "/workspace":
+        return {}
+    return {"workspace_path": workspace_path}
+
+
+@contextlib.contextmanager
+def bash_workspace(workspace_path: str):
+    """Temporarily scope bash tools to one engagement workspace."""
+    safe_path = DockerSandbox._normalize_workspace_path(workspace_path)
+    token = _current_workspace_path.set(safe_path)
+    try:
+        yield
+    finally:
+        _current_workspace_path.reset(token)
+
+
+async def _prune_old_scratch(workspace_path: str = "/workspace") -> None:
     """Drop scratch files older than SCRATCH_TTL_MINUTES.
 
     Throttled to SCRATCH_PRUNE_INTERVAL between attempts so the bash() hot
     path pays for cleanup at most every ~10 minutes per process. Best-effort:
     a failure here must never block the agent's command.
     """
-    global _last_scratch_prune
-    if _sandbox is None:
+    if _sandbox is None or workspace_path == "/workspace":
         return
     now = time.monotonic()
-    if now - _last_scratch_prune < SCRATCH_PRUNE_INTERVAL:
+    if now - _scratch_prune_state.get(workspace_path, 0.0) < SCRATCH_PRUNE_INTERVAL:
         return
-    _last_scratch_prune = now
+    _scratch_prune_state[workspace_path] = now
     try:
         await asyncio.to_thread(
             _sandbox.execute,
-            f"find /workspace/.scratch -type f -mmin +{SCRATCH_TTL_MINUTES} "
+            f"find {workspace_path}/.scratch -type f -mmin +{SCRATCH_TTL_MINUTES} "
             "-delete 2>/dev/null || true",
             timeout=5,
         )
@@ -154,23 +201,41 @@ async def _prune_old_scratch() -> None:
         log.warning("scratch prune failed: %s", e)
 
 
-async def _offload_large_output(output: str, command: str, session: str) -> str:
+async def _offload_large_output(
+    output: str,
+    command: str,
+    session: str,
+    workspace_path: str = "/workspace",
+) -> str:
     """Save large output to scratch file in sandbox, return compact reference.
 
     Implements the filesystem-context "scratch pad" pattern:
-    - Write full output to /workspace/.scratch/ for later retrieval
+    - Write full output to <engagement>/.scratch/ for later retrieval
     - Return preview (head 2K + tail 1K) + file path reference
     - Agent can use read_file or grep to access specific parts later
     """
     assert _sandbox is not None
 
+    if workspace_path == "/workspace":
+        head_preview = output[:2000].strip()
+        tail_preview = output[-1000:].strip()
+        line_count = output.count("\n") + 1
+        char_count = len(output)
+        return (
+            f"{head_preview}\n\n"
+            f"[... {line_count} lines / {char_count} chars truncated. "
+            "No engagement workspace was available, so output was not written "
+            "to the root scratch directory. ...]\n\n"
+            f"...{tail_preview}"
+        )
+
     # Generate unique filename
     ts = int(time.time())
     cmd_hash = hashlib.md5(command.encode()).hexdigest()[:6]
-    filename = f"/workspace/.scratch/{session}_{ts}_{cmd_hash}.txt"
+    filename = f"{workspace_path}/.scratch/{session}_{ts}_{cmd_hash}.txt"
 
     # Write via upload_files (docker cp) to avoid shell injection from output content
-    await asyncio.to_thread(_sandbox.execute, "mkdir -p /workspace/.scratch")
+    await asyncio.to_thread(_sandbox.execute, f"mkdir -p {workspace_path}/.scratch")
     await asyncio.to_thread(_sandbox.upload_files, [(filename, output.encode("utf-8"))])
 
     # Build compact summary with generous preview (Claude Code: ~10KB preview)
@@ -195,6 +260,7 @@ async def bash(
     timeout: int = 120,
     background: bool = False,
     description: str = "",
+    config: RunnableConfig | None = None,
 ) -> str:
     """Execute a bash command in a persistent tmux session inside the Docker sandbox.
 
@@ -216,12 +282,19 @@ async def bash(
     if _sandbox is None:
         raise RuntimeError("DockerSandbox not initialized. Call set_sandbox() first.")
 
-    # Best-effort TTL prune of /workspace/.scratch/ (throttled internally)
-    await _prune_old_scratch()
+    workspace_path = _workspace_path_from_config(config)
+
+    # Best-effort TTL prune of <engagement>/.scratch/ (throttled internally)
+    await _prune_old_scratch(workspace_path)
 
     # Background mode: send command and return immediately
     if background and command:
-        await asyncio.to_thread(_sandbox.start_background, command=command, session=session)
+        await asyncio.to_thread(
+            _sandbox.start_background,
+            command=command,
+            session=session,
+            **_with_workspace_kwargs(workspace_path),
+        )
         return (
             f"[BACKGROUND] Command started in session '{session}'.\n"
             f"Do NOT poll — you will be notified when it completes.\n"
@@ -234,6 +307,7 @@ async def bash(
         session=session,
         timeout=timeout,
         is_input=is_input,
+        **_with_workspace_kwargs(workspace_path),
     )
 
     # Sanitize: surrogates → ANSI strip → repetitive line compression
@@ -244,13 +318,13 @@ async def bash(
     # Tier 2 (>15K): offload to file, return preview + file reference
     # Tier 3 (>5M): handled by size watchdog in docker_sandbox.py (command killed)
     if len(result) > INLINE_LIMIT and not result.startswith("["):
-        return await _offload_large_output(result, command, session)
+        return await _offload_large_output(result, command, session, workspace_path)
 
     return result
 
 
 @tool
-async def bash_output(session: str = "main") -> str:
+async def bash_output(session: str = "main", config: RunnableConfig | None = None) -> str:
     """Retrieve new output from a sandbox session since the last call.
 
     WHEN TO USE:
@@ -270,8 +344,17 @@ async def bash_output(session: str = "main") -> str:
     if _sandbox is None:
         raise RuntimeError("DockerSandbox not initialized.")
 
-    job = await asyncio.to_thread(_sandbox.poll_completion, session)
-    diff_raw = await asyncio.to_thread(_sandbox.read_session_log_diff, session)
+    workspace_path = _workspace_path_from_config(config)
+    job = await asyncio.to_thread(
+        _sandbox.poll_completion,
+        session,
+        **_with_workspace_kwargs(workspace_path),
+    )
+    diff_raw = await asyncio.to_thread(
+        _sandbox.read_session_log_diff,
+        session,
+        **_with_workspace_kwargs(workspace_path),
+    )
     diff = _sanitize_output(diff_raw) if diff_raw else ""
 
     if job is None:
@@ -280,7 +363,7 @@ async def bash_output(session: str = "main") -> str:
         return f"[IDLE] No background job in session '{session}'."
 
     if job.status == "done":
-        _sandbox._jobs.mark_consumed(session)
+        _sandbox._jobs.mark_consumed(session, key=job.key)
         hint = _interpret_exit_code(job.exit_code) if job.exit_code is not None else ""
         body = diff if diff else "(no new output)"
         return (
@@ -295,11 +378,11 @@ async def bash_output(session: str = "main") -> str:
 
 
 @tool
-async def bash_kill(session: str) -> str:
+async def bash_kill(session: str, config: RunnableConfig | None = None) -> str:
     """Forcefully terminate a sandbox session.
 
     Sends Ctrl+C, kills the tmux session, and clears local job tracking.
-    The pipe-pane log file is preserved at /workspace/.sessions/<session>.log.
+    The pipe-pane log file is preserved at <engagement>/.sessions/<session>.log.
 
     Args:
         session: Session name to terminate.
@@ -307,15 +390,16 @@ async def bash_kill(session: str) -> str:
     if _sandbox is None:
         raise RuntimeError("DockerSandbox not initialized.")
 
-    await asyncio.to_thread(_sandbox.kill_session, session)
-    return (
-        f"[KILLED] session '{session}' terminated. "
-        f"Log preserved at /workspace/.sessions/{session}.log."
+    workspace_path = _workspace_path_from_config(config)
+    await asyncio.to_thread(
+        _sandbox.kill_session, session, **_with_workspace_kwargs(workspace_path)
     )
+    log_path = _sandbox.session_log_path(session, workspace_path)
+    return f"[KILLED] session '{session}' terminated. Log preserved at {log_path}."
 
 
 @tool
-async def bash_status() -> str:
+async def bash_status(config: RunnableConfig | None = None) -> str:
     """List all known sandbox sessions with running and completed jobs.
 
     Use before launching a new background job to spot conflicts, or to
@@ -324,12 +408,17 @@ async def bash_status() -> str:
     if _sandbox is None:
         raise RuntimeError("DockerSandbox not initialized.")
 
+    workspace_path = _workspace_path_from_config(config)
     # Poll all known running jobs first, then take ONE snapshot for the table.
     for job in _sandbox._jobs.all_jobs():
-        if job.status == "running":
-            await asyncio.to_thread(_sandbox.poll_completion, job.session)
+        if job.status == "running" and job.workspace_path == workspace_path:
+            await asyncio.to_thread(
+                _sandbox.poll_completion,
+                job.session,
+                **_with_workspace_kwargs(workspace_path),
+            )
 
-    jobs = _sandbox._jobs.all_jobs()
+    jobs = [job for job in _sandbox._jobs.all_jobs() if job.workspace_path == workspace_path]
     if not jobs:
         return "[EMPTY] No tracked background jobs."
 
