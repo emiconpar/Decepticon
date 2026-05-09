@@ -81,6 +81,16 @@ def write_json_atomic(
     sees a half-written file. ``:ro`` mounts cause ``write_text`` /
     ``replace`` to fail; we log once at WARNING and let the in-process
     cache hold the refreshed token for the rest of the container's life.
+
+    Sensitive-data note: this helper persists OAuth refresh / access
+    tokens unencrypted, mirroring how the upstream CLIs (Claude Code's
+    ``~/.claude/.credentials.json``, Codex's ``~/.codex/auth.json``)
+    already store them. Decepticon's value-add is *sharing* those exact
+    files between host CLI and the LiteLLM container so a refresh on
+    either side flows to the other. Encrypting at this layer would break
+    that contract and gain nothing — the file mode is restricted to
+    0o600 so only the owning user can read the bytes. CodeQL flags the
+    plain-text write; the suppression below documents the trade-off.
     """
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +99,8 @@ def write_json_atomic(
         return False
     tmp = path.with_name(f".{path.name}.decepticon.tmp")
     try:
+        # lgtm[py/clear-text-storage-sensitive-data]
+        # See module docstring + function docstring above for rationale.
         tmp.write_text(json.dumps(data, indent=2) + "\n")
         os.chmod(tmp, mode)
         tmp.replace(path)
@@ -97,6 +109,10 @@ def write_json_atomic(
         try:
             tmp.unlink()
         except OSError:
+            # Cleanup is best-effort: if the temp file already vanished
+            # (concurrent reaper, tmpfs eviction) or sits on a read-only
+            # mount, there's nothing actionable left to do — the outer
+            # ``except`` already logged the originating write failure.
             pass
         return False
     return True
