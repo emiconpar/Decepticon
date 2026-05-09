@@ -48,6 +48,18 @@ def _reduce_engagement_name(current: str | None, update: str | None) -> str | No
     return update if update is not None else current
 
 
+def _reduce_workspace_path(current: str | None, update: str | None) -> str | None:
+    """Merge concurrent writes to the active workspace path.
+
+    Without a reducer, LangGraph rejects parallel state updates to the
+    same key with INVALID_CONCURRENT_GRAPH_UPDATE. The launcher is the
+    single source of truth, so every concurrent writer agrees on the
+    same value — last-write-wins on non-None is sufficient and matches
+    ``_reduce_engagement_name`` semantics. Closes #153.
+    """
+    return update if update is not None else current
+
+
 # ── State Schema ──────────────────────────────────────────────────────
 
 
@@ -71,7 +83,7 @@ class OPPLANState(AgentState):
     objective_counter: Annotated[NotRequired[int], OmitFromInput]
     """Auto-increment counter for objective IDs (like Claude Code high water mark)."""
 
-    workspace_path: Annotated[NotRequired[str], OmitFromInput]
+    workspace_path: Annotated[NotRequired[str], OmitFromInput, _reduce_workspace_path]
     """Engagement workspace root path — set by save_opplan/load_opplan."""
 
 

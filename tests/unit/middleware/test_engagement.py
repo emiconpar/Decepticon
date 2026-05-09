@@ -112,6 +112,37 @@ def test_engagement_name_reducer_handles_concurrent_updates(schema) -> None:
     assert result["engagement_name"] == "demo-engagement"
 
 
+@pytest.mark.parametrize(
+    "schema",
+    [
+        OPPLANState,
+        EngagementContextState,
+        _resolve_schemas({AgentState, OPPLANState, EngagementContextState})[0],
+    ],
+)
+def test_workspace_path_reducer_handles_concurrent_updates(schema) -> None:
+    """Regression for #153 — parallel objectives must not trigger
+    INVALID_CONCURRENT_GRAPH_UPDATE on workspace_path."""
+
+    def set_workspace(_state):
+        return {"workspace_path": "/workspace"}
+
+    def keep_workspace(_state):
+        return {"workspace_path": None}
+
+    graph = StateGraph(schema)
+    graph.add_node("set_workspace", set_workspace)
+    graph.add_node("keep_workspace", keep_workspace)
+    graph.add_edge(START, "set_workspace")
+    graph.add_edge(START, "keep_workspace")
+    graph.add_edge("set_workspace", END)
+    graph.add_edge("keep_workspace", END)
+
+    result = graph.compile().invoke({"messages": []})
+
+    assert result["workspace_path"] == "/workspace"
+
+
 # ── inject paths ───────────────────────────────────────────────────────
 
 

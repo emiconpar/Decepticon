@@ -34,7 +34,7 @@ from langgraph.config import get_config
 from langgraph.types import Command
 from typing_extensions import override
 
-from decepticon.middleware.opplan import _reduce_engagement_name
+from decepticon.middleware.opplan import _reduce_engagement_name, _reduce_workspace_path
 from decepticon.tools.bash.bash import bash_workspace
 
 
@@ -44,7 +44,9 @@ class EngagementContextState(AgentState):
     engagement_name: NotRequired[
         Annotated[str, "Workspace slug set by the launcher.", _reduce_engagement_name]
     ]
-    workspace_path: NotRequired[Annotated[str, "Sandbox root for this engagement."]]
+    workspace_path: NotRequired[
+        Annotated[str, "Sandbox root for this engagement.", _reduce_workspace_path]
+    ]
     # Benchmark / CTF challenge context — populated by the benchmark harness.
     target_url: NotRequired[Annotated[str, "CTF challenge target URL."]]
     target_extra_ports: NotRequired[
