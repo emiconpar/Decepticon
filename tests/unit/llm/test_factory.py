@@ -1,6 +1,7 @@
 """Unit tests for decepticon.llm.factory."""
 
 import asyncio
+import logging
 
 import pytest
 
@@ -363,6 +364,122 @@ class TestResolveCredentials:
             AuthMethod.OPENROUTER_API,
             AuthMethod.NVIDIA_API,
         ]
+
+    def test_explicit_priority_no_creds_logs_error(self, monkeypatch, tmp_path, caplog):
+        """An explicit ``DECEPTICON_AUTH_PRIORITY`` whose every listed
+        method fails detection (typical of a broken OAuth credentials
+        mount — e.g. ``CLAUDE_CREDENTIALS_VOLUME`` unset and the
+        compose file bound ``/dev/null`` into the container) must
+        surface the root cause at ERROR level.
+
+        Otherwise the silent fallback to ``all_api_methods()`` runs
+        through nine unrelated providers and the operator only sees a
+        downstream 401-cascade — confusingly masked as a 429 once the
+        routed-to provider (e.g. NVIDIA NIM) cools down. Backward
+        compat is preserved: the resolver still returns
+        ``all_api_methods()`` so module imports remain green; the
+        real model call surfaces a separate, actionable error via
+        ``_reraise_with_actionable_message``.
+        """
+        # Point the OAuth credential path at a file we never create so
+        # detection fails the same way ``/dev/null`` does at runtime.
+        missing = tmp_path / "missing.json"
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("CLAUDE_CODE_CREDENTIALS_PATH", str(missing))
+        monkeypatch.setenv("DECEPTICON_AUTH_PRIORITY", "anthropic_oauth")
+        monkeypatch.setenv("DECEPTICON_AUTH_CLAUDE_CODE", "true")
+        for k in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GEMINI_API_KEY",
+            "MINIMAX_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "XAI_API_KEY",
+            "MISTRAL_API_KEY",
+            "OPENROUTER_API_KEY",
+            "NVIDIA_API_KEY",
+            "OLLAMA_API_BASE",
+            "OLLAMA_MODEL",
+            "OLLAMA_CLOUD_API_BASE",
+            "OLLAMA_CLOUD_MODEL",
+            "LMSTUDIO_API_BASE",
+            "LMSTUDIO_MODEL",
+            "CUSTOM_OPENAI_API_BASE",
+            "CUSTOM_OPENAI_API_KEY",
+        ):
+            monkeypatch.delenv(k, raising=False)
+        for flag in (
+            "DECEPTICON_AUTH_CHATGPT",
+            "DECEPTICON_AUTH_COPILOT",
+            "DECEPTICON_AUTH_GEMINI",
+            "DECEPTICON_AUTH_GROK",
+            "DECEPTICON_AUTH_PERPLEXITY",
+        ):
+            monkeypatch.delenv(flag, raising=False)
+
+        # ``decepticon.core.logging`` sets the parent decepticon logger
+        # to ``propagate=False`` so library output doesn't double up in
+        # apps that own their root handler. caplog hooks the root logger,
+        # so without re-enabling propagation our ERROR record never
+        # reaches pytest's capture buffer. Re-enable for the duration of
+        # the call and let monkeypatch restore on teardown.
+        decepticon_log = logging.getLogger("decepticon")
+        monkeypatch.setattr(decepticon_log, "propagate", True)
+
+        with caplog.at_level(logging.ERROR):
+            creds = _resolve_credentials()
+
+        # Backward compat: still returns the all-API-methods fallback.
+        assert creds.methods == Credentials.all_api_methods().methods
+
+        # ERROR diagnostic must mention the env var name so an operator
+        # scanning ``decepticon logs langgraph`` knows where to look.
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert any("DECEPTICON_AUTH_PRIORITY" in r.getMessage() for r in error_records), (
+            f"No ERROR log mentioned DECEPTICON_AUTH_PRIORITY. "
+            f"Got: {[r.getMessage() for r in error_records]}"
+        )
+
+    def test_implicit_priority_no_creds_stays_info_level(self, monkeypatch, caplog):
+        """Implicit priority (no DECEPTICON_AUTH_PRIORITY set) with no
+        detectable credentials is the import-friendly CI/test path:
+        we keep the existing INFO log and ``all_api_methods()`` return
+        so module imports work without keys present. Only **explicit**
+        priority with no matches gets escalated to ERROR.
+        """
+        for k in (
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GEMINI_API_KEY",
+            "MINIMAX_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "XAI_API_KEY",
+            "MISTRAL_API_KEY",
+            "OPENROUTER_API_KEY",
+            "NVIDIA_API_KEY",
+            "OLLAMA_API_BASE",
+            "OLLAMA_MODEL",
+        ):
+            monkeypatch.delenv(k, raising=False)
+        monkeypatch.delenv("DECEPTICON_AUTH_PRIORITY", raising=False)
+        monkeypatch.delenv("DECEPTICON_AUTH_CLAUDE_CODE", raising=False)
+
+        # Match the explicit-priority test's pattern so caplog sees the
+        # records — the decepticon parent logger defaults to
+        # ``propagate=False`` per ``decepticon.core.logging``.
+        decepticon_log = logging.getLogger("decepticon")
+        monkeypatch.setattr(decepticon_log, "propagate", True)
+
+        with caplog.at_level(logging.DEBUG):
+            creds = _resolve_credentials()
+
+        assert creds.methods == Credentials.all_api_methods().methods
+        # No ERROR records — this case stays informational.
+        error_records = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert not error_records, (
+            f"Unexpected ERROR logs in implicit-priority path: "
+            f"{[r.getMessage() for r in error_records]}"
+        )
 
     def test_ollama_local_only_returns_ollama_chain(self, monkeypatch):
         """Issue #106: a user with only OLLAMA_API_BASE / OLLAMA_MODEL set

@@ -323,7 +323,8 @@ def _resolve_credentials() -> Credentials:
     surface for that misconfiguration.
     """
     priority_raw = os.getenv("DECEPTICON_AUTH_PRIORITY", "")
-    if priority_raw.strip():
+    priority_explicit = bool(priority_raw.strip())
+    if priority_explicit:
         priority: list[AuthMethod] = []
         for token in priority_raw.split(","):
             token = token.strip().lower()
@@ -385,10 +386,34 @@ def _resolve_credentials() -> Credentials:
         if _custom_openai_configured():
             log.info("Only CUSTOM_OPENAI_* detected; using custom OpenAI-compatible endpoint")
             return Credentials(methods=[AuthMethod.CUSTOM_OPENAI_API])
-        log.info(
-            "No credentials detected in environment; using all-API-methods "
-            "fallback so module-level agent constructors stay importable"
-        )
+        if priority_explicit:
+            # User expressed clear intent (set DECEPTICON_AUTH_PRIORITY) but
+            # every listed method failed detection. Surface the root cause
+            # at ERROR level — otherwise the silent fallback to
+            # all_api_methods() runs through providers the user doesn't
+            # have, producing a confusing 401 cascade (often masked as a
+            # downstream "rate limit (429)" once the routed-to provider
+            # cools down). Return behavior preserved so module imports
+            # stay green; real model calls still surface a remediation
+            # hint via _reraise_with_actionable_message.
+            log.error(
+                "DECEPTICON_AUTH_PRIORITY=%r set but no listed method has "
+                "detectable credentials. Verify: (1) API keys are "
+                "non-placeholder (e.g. ANTHROPIC_API_KEY starts with "
+                "'sk-ant-'), (2) OAuth flag matches credential file "
+                "(e.g. DECEPTICON_AUTH_CLAUDE_CODE=true requires "
+                "~/.claude/.credentials.json to exist and contain a valid "
+                "JSON object — a /dev/null mount fails this check). "
+                "Falling back to all-API-methods so module imports "
+                "remain importable; every model call will 401 until "
+                "the priority chain is fixed.",
+                priority_raw,
+            )
+        else:
+            log.info(
+                "No credentials detected in environment; using all-API-methods "
+                "fallback so module-level agent constructors stay importable"
+            )
         return Credentials.all_api_methods()
 
     return Credentials(methods=methods)
