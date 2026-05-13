@@ -436,3 +436,92 @@ def test_benchmark_with_missing_optional_fields(
     assert "**Vulnerability tags:**" not in text
     assert "**Flag format:**" not in text
     assert "**Mission brief:**" not in text
+
+
+# ── Per-run language override ─────────────────────────────────────────────
+
+
+def test_hydrate_pulls_language_from_configurable_when_state_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SaaS launcher path: config.configurable.language flows into state."""
+    monkeypatch.setattr(
+        "decepticon.middleware.engagement._configurable_from_runnable_config",
+        lambda: {"language": "ko"},
+    )
+
+    updates = _hydrate_engagement_state({})
+
+    assert updates == {"language": "ko"}
+
+
+def test_hydrate_does_not_overwrite_existing_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """State-set language wins over a different value in configurable."""
+    monkeypatch.setattr(
+        "decepticon.middleware.engagement._configurable_from_runnable_config",
+        lambda: {"language": "en"},
+    )
+
+    updates = _hydrate_engagement_state({"language": "ko"})
+
+    assert updates is None
+
+
+def test_inject_appends_language_policy_when_state_carries_language(
+    middleware: EngagementContextMiddleware,
+) -> None:
+    """A run with state.language=ko produces a LANGUAGE_POLICY system block."""
+    req = _FakeRequest(state={"language": "ko"})
+    result = middleware._inject(req)
+    text = _flatten(result.system_message)
+
+    assert "<LANGUAGE_POLICY>" in text
+    assert "Korean" in text
+
+
+def test_inject_skips_language_policy_for_english_or_empty(
+    middleware: EngagementContextMiddleware,
+) -> None:
+    """en / empty → no override block; default prompt policy applies."""
+    req_en = _FakeRequest(state={"language": "en"})
+    assert middleware._inject(req_en).system_message is None
+
+    req_empty = _FakeRequest(state={"language": ""})
+    assert middleware._inject(req_empty).system_message is None
+
+
+def test_inject_combines_engagement_slug_and_language_in_one_message(
+    middleware: EngagementContextMiddleware,
+) -> None:
+    """Both injections compose into a single SystemMessage in order."""
+    req = _FakeRequest(state={"engagement_name": "acme", "language": "ja"})
+    result = middleware._inject(req)
+    text = _flatten(result.system_message)
+
+    assert "Workspace slug: acme" in text
+    assert "<LANGUAGE_POLICY>" in text
+    assert "Japanese" in text
+
+
+def test_build_language_policy_helper_handles_aliases_and_no_op_cases() -> None:
+    """The shared helper is the single source of truth for both paths."""
+    from decepticon.agents.prompts import build_language_policy
+
+    # No-op codes
+    assert build_language_policy("") is None
+    assert build_language_policy("en") is None
+    assert build_language_policy("EN") is None
+
+    # ISO code → full name
+    policy_ko = build_language_policy("ko")
+    assert policy_ko is not None and "Korean" in policy_ko
+
+    # Country-code alias resolved (jp → ja → Japanese)
+    policy_jp = build_language_policy("jp")
+    assert policy_jp is not None and "Japanese" in policy_jp
+
+    # Wenyan special mode
+    policy_wenyan = build_language_policy("wenyan")
+    assert policy_wenyan is not None and "文言文" in policy_wenyan

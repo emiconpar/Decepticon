@@ -47,6 +47,12 @@ class EngagementContextState(AgentState):
     workspace_path: NotRequired[
         Annotated[str, "Sandbox root for this engagement.", _reduce_workspace_path]
     ]
+    # Per-run language override. When set via config.configurable.language,
+    # the middleware appends a LANGUAGE_POLICY SystemMessage that supersedes
+    # the prompt-time DECEPTICON_LANGUAGE env policy. Multi-tenant launchers
+    # (SaaS) need different orgs to receive different language outputs from
+    # the same container, which the env-based path cannot deliver.
+    language: NotRequired[Annotated[str, "Per-run output language (ISO 639-1)."]]
     # Benchmark / CTF challenge context — populated by the benchmark harness.
     target_url: NotRequired[Annotated[str, "CTF challenge target URL."]]
     target_extra_ports: NotRequired[
@@ -107,6 +113,11 @@ def _hydrate_engagement_state(state: Any) -> dict[str, Any] | None:
         cfg_workspace = configurable.get("workspace_path")
         if isinstance(cfg_workspace, str) and cfg_workspace:
             updates["workspace_path"] = cfg_workspace
+
+    if not get("language"):
+        cfg_lang = configurable.get("language")
+        if isinstance(cfg_lang, str) and cfg_lang:
+            updates["language"] = cfg_lang
 
     return updates or None
 
@@ -245,6 +256,7 @@ class EngagementContextMiddleware(AgentMiddleware):
 
         slug = get("engagement_name", "") or ""
         workspace = get("workspace_path", "/workspace") or "/workspace"
+        language = get("language", "") or ""
 
         sections: list[str] = []
         if slug:
@@ -259,6 +271,23 @@ class EngagementContextMiddleware(AgentMiddleware):
                     brief=get("mission_brief", "") or "",
                 )
             )
+
+        # Per-run language override. Multi-tenant launchers (SaaS web) inject
+        # the org's selected language via config.configurable.language; we
+        # append the same LANGUAGE_POLICY block the prompt builder would have
+        # produced if DECEPTICON_LANGUAGE were set, but per-run rather than
+        # per-container. Because this is a later SystemMessage, it supersedes
+        # the prompt-time policy without needing to reach into the cached
+        # static prompt.
+        #
+        # Lazy import to avoid a circular: agents.__init__ pulls in agents
+        # which pull in middleware which would otherwise pull back into
+        # agents.prompts before that package is fully initialized.
+        from decepticon.agents.prompts import build_language_policy
+
+        language_policy = build_language_policy(language)
+        if language_policy:
+            sections.append("\n\n" + language_policy)
 
         if not sections:
             return request
