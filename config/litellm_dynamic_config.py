@@ -329,6 +329,57 @@ def build_model_entry(model_name: str) -> dict[str, Any]:
 # enabled the auth method, the handshake blocks → times out → container
 # becomes unhealthy. Gating on DECEPTICON_AUTH_* prevents that.
 
+# Shadow pricing for subscription OAuth routes (USD per token, as of
+# 2026-05-14). These routes are paid via flat monthly subscriptions
+# (ChatGPT Pro/Plus/Team, Gemini Advanced, Copilot Pro, SuperGrok,
+# Perplexity Pro), so per-token cost is NOT what the user actually pays.
+# We stamp the equivalent paid-API price into ``model_info`` so
+# /spend/logs reports an "API-equivalent" USD number — useful for
+# comparing benchmark cost across paid and subscription routes
+# apples-to-apples. The OSS user's real cash spend stays the
+# subscription fee; this number is opportunity cost.
+#
+# Perplexity Sonar numbers are best-effort against the published rate
+# card (Sonar $1/$1, Sonar Pro $3/$15) — search-call surcharge not
+# modeled.
+_SUBSCRIPTION_SHADOW_PRICING: dict[str, tuple[float, float]] = {
+    "auth/gpt-5.5": (0.000005, 0.000030),
+    "auth/gpt-5.4": (0.0000025, 0.000015),
+    "auth/gpt-5.4-mini": (0.00000075, 0.0000045),
+    "auth/gpt-5.3-codex": (0.00000175, 0.000014),
+    "gemini-sub/gemini-2.5-pro": (0.00000125, 0.00001),
+    "gemini-sub/gemini-2.5-flash": (0.0000003, 0.0000025),
+    "copilot/gpt-5.5": (0.000005, 0.000030),
+    "copilot/claude-sonnet-4-6": (0.000003, 0.000015),
+    "copilot/gpt-5.4-mini": (0.00000075, 0.0000045),
+    "copilot/gpt-5.3-codex": (0.00000175, 0.000014),
+    "grok-sub/grok-4.3": (0.00000125, 0.0000025),
+    "grok-sub/grok-4-1-fast-reasoning": (0.0000002, 0.0000005),
+    "pplx-sub/sonar-pro": (0.000003, 0.000015),
+    "pplx-sub/sonar": (0.000001, 0.000001),
+}
+
+
+def _with_shadow_pricing(route: dict[str, Any]) -> dict[str, Any]:
+    """Attach ``model_info`` shadow pricing to a subscription route, if any.
+
+    Returns the route unchanged when ``model_name`` is not in
+    ``_SUBSCRIPTION_SHADOW_PRICING`` — preserves the "subscription is
+    free per-token" reading so a future operator who deliberately
+    omits a route from the map gets ``$0`` rather than silent default
+    pricing from LiteLLM's built-in cost map.
+    """
+    pricing = _SUBSCRIPTION_SHADOW_PRICING.get(route["model_name"])
+    if pricing is None:
+        return route
+    enriched = dict(route)
+    enriched["model_info"] = {
+        "input_cost_per_token": pricing[0],
+        "output_cost_per_token": pricing[1],
+    }
+    return enriched
+
+
 _SUBSCRIPTION_ROUTES: dict[str, list[dict[str, Any]]] = {
     # env flag → model_list entries
     "DECEPTICON_AUTH_CHATGPT": [
@@ -480,7 +531,7 @@ def _inject_subscription_routes(
             continue
         for route in routes:
             if route["model_name"] not in existing:
-                model_list.append(route)
+                model_list.append(_with_shadow_pricing(route))
                 existing.add(route["model_name"])
         # Add corresponding fallbacks
         for fb in _SUBSCRIPTION_FALLBACKS.get(flag, []):

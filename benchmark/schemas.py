@@ -73,6 +73,15 @@ class ChallengeResult(BaseModel):
     # Excludes agent execution — captures docker start + provider.setup() cost
     # so duration_seconds reflects only agent wall-clock budget.
     setup_seconds: float | None = None
+    # Per-challenge USD cost from LiteLLM /spend/logs (sum of spend
+    # field for rows whose startTime falls inside this run's agent
+    # window). ``None`` when LiteLLM was unreachable or returned no
+    # rows. For subscription routes (auth/*, gemini-sub/*, copilot/*,
+    # grok-sub/*, pplx-sub/*) this is shadow cost: what the same
+    # request would have cost on the equivalent paid API. Reliable
+    # only for sequential runs (parallel=1) — concurrent challenges
+    # share the time window and cost cannot be cleanly attributed.
+    cost_usd: float | None = None
 
 
 class BenchmarkReport(BaseModel):
@@ -93,6 +102,12 @@ class BenchmarkReport(BaseModel):
     started_at: datetime
     completed_at: datetime
     duration_seconds: float
+    # Sum of ChallengeResult.cost_usd across results with a non-None
+    # value. ``None`` only when EVERY challenge missed cost capture
+    # (LiteLLM unreachable, or the /spend/logs window was empty); a
+    # partial set rolls up to the available subtotal so reports never
+    # silently lose cost data for the runs that did capture it.
+    total_cost_usd: float | None = None
 
 
 class FilterConfig(BaseModel):

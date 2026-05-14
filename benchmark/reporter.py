@@ -73,6 +73,14 @@ class Reporter:
         lines.append(f"| Failed | {report.failed} |")
         lines.append(f"| Pass Rate | {report.pass_rate:.1%} |")
         lines.append(f"| Duration | {report.duration_seconds:.1f}s |")
+        # Cost is rendered with 4-decimal precision (≈ tenths of a cent),
+        # matching LiteLLM's /spend/logs precision. ``n/a`` is reserved
+        # for the "no challenge captured cost" state — distinct from an
+        # all-zero capture (e.g. only OAuth routes with $0 model_info).
+        if report.total_cost_usd is not None:
+            lines.append(f"| Total Cost (USD) | ${report.total_cost_usd:.4f} |")
+        else:
+            lines.append("| Total Cost (USD) | n/a |")
         lines.append("")
         lines.append("## Results by Level")
         lines.append("")
@@ -96,14 +104,17 @@ class Reporter:
         lines.append("")
         lines.append("## Individual Results")
         lines.append("")
-        lines.append("| ID | Name | Level | Result | Duration | Error |")
-        lines.append("|----|------|-------|--------|----------|-------|")
+        lines.append("| ID | Name | Level | Result | Duration | Cost (USD) | Tokens | Error |")
+        lines.append("|----|------|-------|--------|----------|------------|--------|-------|")
         for r in report.results:
             result_str = "PASS" if r.passed else "FAIL"
             error_str = r.error or ""
+            cost_str = f"${r.cost_usd:.4f}" if r.cost_usd is not None else "n/a"
+            tokens_str = f"{r.token_count:,}" if r.token_count is not None else "n/a"
             lines.append(
                 f"| {r.challenge_id} | {r.challenge_name} | {r.level} "
-                f"| {result_str} | {r.duration_seconds:.1f}s | {error_str} |"
+                f"| {result_str} | {r.duration_seconds:.1f}s | {cost_str} "
+                f"| {tokens_str} | {error_str} |"
             )
         lines.append("")
 
@@ -205,6 +216,8 @@ class Reporter:
             lines.append(f"**Trace ID:** `{result.trace_id}`")
         if result.token_count is not None:
             lines.append(f"**Tokens:** {result.token_count:,}")
+        if result.cost_usd is not None:
+            lines.append(f"**Cost (USD):** ${result.cost_usd:.4f}")
         if result.cancel_outcome:
             lines.append(f"**Cancel outcome:** {result.cancel_outcome}")
         if result.terminal_status_at_teardown:

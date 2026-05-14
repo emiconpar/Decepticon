@@ -83,6 +83,8 @@ def run(
     typer.echo("")
     typer.echo(f"Results: {report.passed}/{report.total} passed ({report.pass_rate:.1%})")
     typer.echo(f"Duration: {report.duration_seconds:.1f}s")
+    if report.total_cost_usd is not None:
+        typer.echo(f"Cost (USD): ${report.total_cost_usd:.4f}")
     typer.echo(f"JSON report: {json_path}")
     typer.echo(f"Markdown report: {md_path}")
     typer.echo(f"Evidence: {evidence_dir}")

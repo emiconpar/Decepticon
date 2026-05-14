@@ -10,6 +10,7 @@ import subprocess
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -103,6 +104,67 @@ class Harness:
     def __init__(self, provider: BaseBenchmarkProvider, config: BenchmarkConfig) -> None:
         self.provider = provider
         self.config = config
+
+    @property
+    def _litellm_url(self) -> str:
+        """Derive the LiteLLM URL from the configured LangGraph URL.
+
+        Both services are exposed on localhost when the harness runs on
+        the host (default in ``make benchmark``). The :2024 → :4000 swap
+        matches ``_ensure_services_healthy``; keeping the derivation in
+        one place avoids drift if the port mapping changes.
+        """
+        return self.config.langgraph_url.replace(":2024", ":4000")
+
+    @staticmethod
+    def _utc_iso() -> str:
+        """RFC 3339 timestamp matching LiteLLM's spend_logs.startTime format."""
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+    async def _query_cost(self, start_iso: str, end_iso: str) -> float | None:
+        """Sum spend from LiteLLM's /spend/logs for a time window.
+
+        Returns the USD total (sum of the ``spend`` field across every
+        row whose ``startTime`` falls inside ``[start_iso, end_iso]``)
+        or ``None`` if LiteLLM is unreachable, returns a non-200, or
+        emits a payload we can't parse. ``None`` is distinct from
+        ``0.0`` — the former means "we don't know," the latter means
+        "this window had no LLM calls (or all rows had spend=0)."
+
+        Uses the master key for read-only spend access; this is the
+        same path /spend/logs already serves to the LiteLLM admin UI.
+        Single attempt (no retry loop) so a slow proxy doesn't double
+        the harness's per-challenge teardown latency.
+        """
+        master_key = os.getenv("LITELLM_MASTER_KEY", "sk-decepticon-master")
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(
+                    f"{self._litellm_url}/spend/logs",
+                    headers={"Authorization": f"Bearer {master_key}"},
+                    params={"start_date": start_iso, "end_date": end_iso},
+                )
+        except Exception as exc:
+            log.warning("harness.cost: /spend/logs unreachable: %s", exc)
+            return None
+        if r.status_code != 200:
+            log.warning("harness.cost: /spend/logs HTTP %s — %s", r.status_code, r.text[:200])
+            return None
+        try:
+            rows = r.json()
+        except Exception as exc:
+            log.warning("harness.cost: /spend/logs payload not JSON: %s", exc)
+            return None
+        if not isinstance(rows, list):
+            log.warning("harness.cost: /spend/logs returned non-list payload type=%s", type(rows))
+            return None
+        total = 0.0
+        for row in rows:
+            if isinstance(row, dict):
+                spend = row.get("spend")
+                if isinstance(spend, (int, float)):
+                    total += float(spend)
+        return round(total, 6)
 
     async def _cancel_active_runs(self, active: _ActiveRun) -> None:
         """Fire-and-forget cancel of the in-flight LangGraph run for ``active``.
@@ -454,6 +516,12 @@ class Harness:
 
         run_start = time.time()
         agent_start: float | None = None
+        # ISO timestamp captured right before the LangGraph run is
+        # submitted, so /spend/logs filtering covers the full agent
+        # window without including provider.setup() / sandbox-restart
+        # noise. ``None`` until set, signaling "no agent ran yet —
+        # don't attempt a cost query" on early-return paths.
+        cost_start_iso: str | None = None
         try:
             setup_result = self.provider.setup(challenge)
             if not setup_result.success:
@@ -472,6 +540,7 @@ class Harness:
             # Agent creates its own OPPLAN based on challenge info
             extra_ports = setup_result.extra_ports
             agent_start = time.time()
+            cost_start_iso = self._utc_iso()
             agent_resp = await asyncio.wait_for(
                 self._invoke_agent(challenge, setup_result.target_url, extra_ports, active=active),
                 timeout=self.config.timeout,
@@ -513,6 +582,8 @@ class Harness:
             # completion. Safe to teardown immediately.
             result.cancel_outcome = "clean"
             result.terminal_status_at_teardown = "success"
+            if cost_start_iso is not None:
+                result.cost_usd = await self._query_cost(cost_start_iso, self._utc_iso())
             self.provider.teardown(challenge)
             return result
 
@@ -551,10 +622,17 @@ class Harness:
                 result.agent_summary = agent_summary
                 result.trace_id = trace_id
                 result.token_count = token_count
+                if cost_start_iso is not None:
+                    result.cost_usd = await self._query_cost(cost_start_iso, self._utc_iso())
                 self.provider.teardown(challenge)
                 return result
 
             now = time.time()
+            cost_usd = (
+                await self._query_cost(cost_start_iso, self._utc_iso())
+                if cost_start_iso is not None
+                else None
+            )
             self.provider.teardown(challenge)
             return ChallengeResult(
                 challenge_id=challenge.id,
@@ -570,6 +648,7 @@ class Harness:
                 agent_summary=agent_summary,
                 trace_id=trace_id,
                 token_count=token_count,
+                cost_usd=cost_usd,
             )
         except Exception as exc:
             # Unexpected exception path — same discipline: cancel + verify
@@ -580,6 +659,11 @@ class Harness:
             )
             agent_summary, trace_id, token_count = postmortem
             now = time.time()
+            cost_usd = (
+                await self._query_cost(cost_start_iso, self._utc_iso())
+                if cost_start_iso is not None
+                else None
+            )
             self.provider.teardown(challenge)
             return ChallengeResult(
                 challenge_id=challenge.id,
@@ -595,6 +679,7 @@ class Harness:
                 agent_summary=agent_summary,
                 trace_id=trace_id,
                 token_count=token_count,
+                cost_usd=cost_usd,
             )
         finally:
             # Workspace cleanup is safe in unconditional finally — it doesn't
