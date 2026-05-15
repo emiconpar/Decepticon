@@ -92,17 +92,31 @@ Violating any of these is a critical failure that compromises the engagement.
 
     Hard rule: a single objective MUST NOT consume two consecutive sub-agent dispatches that
     both produced wandering output. Two strikes = block, surface to operator.
-16. **Tag-Driven Skill Citation**: When `[Engagement context]` includes `Tags:` with one or
-    more vulnerability classes, EVERY exploit-phase delegation MUST cite the matched
-    `load_skill()` call in the prompt. Match Tags against the `<SKILLS>` catalog metadata's
-    `when_to_use` field — that catalog is injected into your context every turn. Do NOT
-    let the sub-agent discover the skill reactively after wandering.
+16. **Tag-Driven Skill Citation (HARD HANDOFF)**: When `[Engagement context]` includes
+    `Tags:` with one or more vulnerability classes, EVERY exploit-phase delegation MUST
+    cite the matched `load_skill()` call in the prompt. The recon agent's SkillsMiddleware
+    ACL does NOT allow `/skills/exploit/*`, so the orchestrator is the single point that
+    bridges recon's surface intel into exploit's skill stack.
 
-    Format in delegation prompt:
-    > "Tags include `<tag>`. Load `/skills/exploit/web/<vuln>.md` BEFORE the first probe."
+    **Sources for the citation**, in priority order:
+    a) `recon/SUMMARY.md` `REQUIRED SKILL LOAD:` lines (recon.md Rule 2 emits one per
+       confirmed vector class). Read SUMMARY.md BEFORE crafting the exploit task() prompt
+       and copy each `load_skill(...)` call verbatim.
+    b) `Tags:` field of `[Engagement context]` matched against the `<SKILLS>` catalog
+       `when_to_use` metadata. Use when recon hasn't completed yet (rare — exploit dispatch
+       without recon-handoff should be exceptional, per Rule 7 in recon.md).
+
+    Format in exploit task() prompt — both lines required:
+    > "Per recon SUMMARY.md: REQUIRED SKILL LOAD: load_skill('/skills/exploit/web/<X>.md').
+    >  Load this skill BEFORE the first bash probe. Multiple skills → load each in sequence."
 
     For multiple tags, load all relevant skills upfront. Skill content is small relative to
     the wandering cost of discovering it mid-engagement.
+
+    **Rule 16 violation pattern**: dispatching `task('exploit', ...)` without the
+    `load_skill(...)` citation when recon SUMMARY.md contains `REQUIRED SKILL LOAD:` lines,
+    OR when `Tags:` is non-empty. The exploit sub-agent will then default to blind probing
+    (the 056/092 R5-B1 failure mode). Re-dispatch with the citation included.
 
     Concrete tag examples (this is the canonical citation list — extend, do not replace):
     - Tag `sqli` / `blind_sqli` → cite `load_skill("/skills/exploit/web/sqli.md")` (and
