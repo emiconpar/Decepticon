@@ -86,6 +86,7 @@ line-length = 100
 target-version = "py313"
 extend-exclude = [
     "benchmark/xbow-validation-benchmarks",
+    "benchmark/MHBench",
     "benchmark/results",
 ]
 
@@ -137,6 +138,7 @@ exclude = [
     "reference",
     "decepticon/auth/providers",
     "benchmark/xbow-validation-benchmarks",
+    "benchmark/MHBench",
     "benchmark/results",
 ]
 # Use pyright "standard" semantics rather than the basedpyright "all" default —
