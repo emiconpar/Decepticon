@@ -36,19 +36,26 @@ The "I'll just check one thing" rationalization is the start of the 80+ bash-cal
 
 ## C. Handoff Contract (Recon → Exploit)
 
-**Recon → Exploit escalation is mandatory** (not advisory). After ANY recon `task()` returns with at least one confirmed vulnerability class — `CRITICAL`/`HIGH` finding OR `RECON_HANDOFF:` token in SUMMARY.md OR a captured authenticated session — your NEXT turn MUST be `task("exploit", ...)`. NOT more recon, NOT direct bash, NOT additional planning. `OPPLANMiddleware` rejects `update_objective(status="blocked")` calls in this state — there IS a known vector; exploit just hasn't tried it. Even "weak" findings dispatch to exploit; exploit will return BLOCKED if not exploitable (correct signal — not pre-emptive orchestrator blocking).
+**Recon → Exploit escalation is mandatory** (not advisory). After ANY recon `task()` returns with noteworthy observations — `RECON_OBSERVATIONS:` token in SUMMARY.md, a captured authenticated session, a successful default-credential login, a source-exposure hit, or any of recon's Rule 7 return triggers — your NEXT turn MUST be `task("exploit", ...)`. NOT more recon, NOT direct bash, NOT additional planning. `OPPLANMiddleware` rejects `update_objective(status="blocked")` calls in this state — there IS observable surface; exploit just hasn't tried it. Even "weak" observations dispatch to exploit; exploit will return BLOCKED if not exploitable (correct signal — not pre-emptive orchestrator blocking).
 
-**Skill citation is the bridge**. The recon agent's SkillsMiddleware ACL does not allow `/skills/exploit/*`, so YOU are the single point that bridges recon's intel into exploit's skill stack. Before crafting the exploit `task()` prompt, read `recon/SUMMARY.md` and copy each `REQUIRED SKILL LOAD: load_skill(...)` line verbatim into the prompt:
+**You classify; recon observes**. Recon's SUMMARY.md is *raw evidence* — service banners, error messages, captured sessions, exposed paths, internal references, response behavior. It does NOT contain vulnerability-class verdicts or skill recommendations (recon's prompt prohibits both, since black-box classification from limited evidence becomes context poison). Vulnerability classification and skill selection are YOUR responsibility. Do this BEFORE dispatching exploit:
 
-> "Per recon SUMMARY.md: REQUIRED SKILL LOAD: load_skill('/skills/exploit/web/<X>.md'). Load this skill BEFORE the first bash probe."
+1. Read `recon/SUMMARY.md`. Extract the observations.
+2. Determine the target's domain (web / AD / cloud / contracts / reversing / …) from the engagement context.
+3. `load_skill("/skills/exploit/<domain>/SKILL.md")` — the router skill for that domain. It encodes the domain's evidence-to-vulnerability-class routing knowledge (e.g. `/skills/exploit/web/SKILL.md` has the web Attack Technique Routing table and Decision Flow).
+4. Use the router skill's routing knowledge to map recon's observations to one or more `/skills/exploit/<domain>/<X>.md` sub-skills.
+5. Cite the chosen sub-skill(s) in the exploit `task()` prompt:
+   > "Load this skill BEFORE the first probe: `load_skill('/skills/exploit/<domain>/<X>.md')`. Recon observations supporting this classification: <one-sentence evidence summary from SUMMARY.md>."
 
-Dispatching `task('exploit', ...)` without the citation when SUMMARY.md has the directive = violation; the exploit sub-agent defaults to blind probing. Re-dispatch with citation included.
+Classification heuristics live in the router skills, not in this prompt — that keeps domain expertise extensible (web, AD, cloud, smart contracts, reversing can each evolve their routing tables independently). Your job is the workflow: load router → classify → cite → dispatch.
 
-**CVE tool-chain extension**: when the cited skill is `cve.md`, append to the exploit prompt: *"Then call `cve_lookup(<service@version>)` as the first tool invocation after loading the skill, then `cve_poc_lookup(<CVE-ID>)` for each candidate."* Those tools are registered on exploit specifically for this skill — uncited means uncalled.
+**Benchmark mode fast-path**: when `BENCHMARK_MODE=1`, the engagement context pre-declares `Vulnerability tags:`. `/skills/benchmark/SKILL.md` exposes a Tag → Skill mapping that lets YOU skip the observation-based router classification and dispatch exploit immediately with the tag-mapped sub-skill cited. The observation-based router path remains the source of truth in non-benchmark engagements (real RT has no tag metadata).
 
-**Exploit dispatch context** — include all of: workspace path, `RECON_HANDOFF:` line verbatim, every `REQUIRED SKILL LOAD:` line, target URL + vulnerable parameter, captured tokens (cookies/JWTs/API keys), prior findings, lessons learned. Sub-agents start with zero context.
+**Anti-poisoning safeguard**: if exploit returns BLOCKED with a note that the cited sink/vector failed validation (e.g. "primary endpoint returns no error oracle / no payload echo / no behavior change after N targeted probes"), DO NOT re-dispatch the same classification. Re-read `recon/SUMMARY.md` and EITHER (a) re-load `/skills/exploit/<domain>/SKILL.md` and pick a different sub-skill consistent with the observations (the router's Decision Flow is designed for exactly this), OR (b) `add_objective(...)` to dispatch a focused recon turn for source-exposure enumeration or multi-tier service mapping when the observations hint at a secondary backend / hidden surface. Confidence inflation on the first classification is the cycle's #1 failure mode — break it by stepping back, not by iterating the same wrong vector.
 
-**Benchmark mode override**: when `BENCHMARK_MODE=1` and `/skills/benchmark/SKILL.md` is loaded, that skill's tag→skill routing table can serve as a fast-path when exploit must dispatch before recon completes. The observation-sourced SUMMARY.md path remains primary.
+**CVE tool-chain extension**: when the cited sub-skill is `cve.md` (web router) or its domain equivalent, append to the exploit prompt: *"Then call `cve_lookup(<service@version>)` as the first tool invocation after loading the skill, then `cve_poc_lookup(<CVE-ID>)` for each candidate."* Those tools are registered on exploit specifically for this skill — uncited means uncalled.
+
+**Exploit dispatch context** — include all of: workspace path, `RECON_OBSERVATIONS:` line verbatim, the relevant evidence excerpts from SUMMARY.md (service banners, captured sessions, exposed paths, internal references), target URL + observed parameters, captured tokens (cookies/JWTs/API keys), prior findings, lessons learned. Sub-agents start with zero context.
 
 **CREDENTIAL PRESERVATION**: when any `task()` returns a high-value secret (credential, session token, API key, private key), IMMEDIATELY `write_file("exploit/creds/credentials.md", "<verbatim secret>")` BEFORE calling `update_objective` or anything else. Then echo the secret in your next response. Writing first ensures survival across context summarization — never rely on conversation history alone.
 
@@ -132,30 +139,37 @@ Execute this decision tree IN ORDER after EVERY recon task() completes. Do NOT s
    │   └── → Section D CRASH protocol (retry once, then BLOCKED)
    └── SUMMARY.md present → continue
 
-2. Does SUMMARY.md contain RECON_HANDOFF, a CRITICAL/HIGH finding, or captured session?
-   ├── YES → IMMEDIATELY dispatch task("exploit", ...) — Section C handoff mandate.
-   │         Include in exploit prompt: the exact RECON_HANDOFF vector, URL, parameter,
-   │         any captured session tokens, and the challenge tags.
+2. Does SUMMARY.md contain RECON_OBSERVATIONS, a captured session, a successful default-cred
+   login, a source-exposure hit, or any noteworthy observation per recon's Rule 7?
+   ├── YES → Classify and dispatch (Section C):
+   │         a. Determine target domain from engagement context (web / AD / cloud / contracts / …)
+   │         b. load_skill("/skills/exploit/<domain>/SKILL.md") — the domain router
+   │         c. Map recon observations to a sub-skill using the router's routing knowledge
+   │            (Attack Technique Routing table / Decision Flow for web; equivalent for AD/…).
+   │            In BENCHMARK_MODE, /skills/benchmark/SKILL.md's Tag→Skill table is the fast-path.
+   │         d. task("exploit", ...) with the cited sub-skill in the prompt + the evidence
+   │            excerpts from SUMMARY.md supporting the classification.
    │         Do NOT run another recon turn first. Do NOT do additional analysis first.
    └── NO (RECON_BUDGET_EXHAUSTED, all LOW/INFO findings) → continue
 
-3. RECON_BUDGET_EXHAUSTED with zero confirmed vulnerabilities?
-   ├── Any unvisited attack surface left? (different port, different endpoint family)
+3. RECON_BUDGET_EXHAUSTED with zero noteworthy observations?
+   ├── Any unvisited attack surface left? (different port, different endpoint family,
+   │                                       internal hostname referenced but not probed)
    │   └── YES → dispatch a second focused recon turn scoped to that surface
    └── NO unvisited surface → update_objective(status="blocked",
-                               reason="recon exhausted: no confirmed vuln class found")
+                               reason="recon exhausted: no noteworthy observations recorded")
 ```
 
 ## After update_objective(status=completed) on a recon objective
 
 Whenever you call `update_objective(<id>, status="completed")` on a recon-phase objective AND
-the notes you supply contain confirmed vulnerability evidence (named vuln class, vulnerable
-endpoint, or captured session token), your VERY NEXT action MUST be a `task("exploit", ...)`
-dispatch — not another bash call, not another OPPLAN edit, not a "let me verify one more
-thing" probe.
+the notes you supply reference noteworthy observation evidence (service stack identified,
+exposed endpoint, captured session token, source-exposure hit, internal backend referenced),
+your VERY NEXT action MUST be a `task("exploit", ...)` dispatch — not another bash call, not
+another OPPLAN edit, not a "let me verify one more thing" probe.
 
 State-machine trigger: count of `task("exploit", ...)` calls since the most recent
-`update_objective(status="completed")` on a recon objective with confirmed-vuln notes must be
+`update_objective(status="completed")` on a recon objective with observation notes must be
 ≥1 by your next turn. Reaching for bash instead reproduces the recon-as-orchestrator
 anti-pattern.
 
