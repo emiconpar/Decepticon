@@ -275,6 +275,19 @@ class MHBenchProvider(BaseBenchmarkProvider):
                 error=f"MHBench config not found at {config_abs}",
             )
 
+        # External-topology mode short-circuit. When config.json has an
+        # ``external_topology`` section, the topology is assumed to be
+        # already deployed and reachable via an externally-exposed SSH
+        # endpoint (typically a NAT port on a public IP). The provider
+        # skips ``main.py setup`` + OpenStack discovery entirely and uses
+        # the operator-provided IPs to seed the flag and stage the
+        # agent's ssh_config. Use this when Decepticon's stack runs on a
+        # different machine than the OpenStack tenant (e.g., local
+        # workstation attacking a cloud-hosted DevStack).
+        external = _resolve_external_topology(config_abs)
+        if external is not None:
+            return self._setup_external(challenge, spec, external, config_abs)
+
         # 1. Deploy / restore topology via upstream main.py setup.
         deploy_err = self._run_mhbench_cli(spec.env_type, config_abs, "setup")
         if deploy_err:
@@ -286,6 +299,92 @@ class MHBenchProvider(BaseBenchmarkProvider):
         # seeding / key staging steps and tears the topology down on any
         # failure so the operator's quota does not bleed across retries.
         return self._post_setup(challenge, spec, config_abs)
+
+    def _setup_external(
+        self,
+        challenge: Challenge,
+        spec: TopologySpec,
+        external: ExternalTopology,
+        config_abs: Path,
+    ) -> SetupResult:
+        """External-topology variant of ``setup()``.
+
+        Skips ``main.py setup`` and OpenStack discovery; builds the
+        topology snapshot directly from the operator-provided
+        ``external_topology`` config and runs flag seeding + artefact
+        staging using the externally-reachable jump endpoint.
+
+        On failure: no teardown (the operator manages topology lifecycle
+        out-of-band, so the provider does not own the OpenStack VMs).
+        """
+        if external.env_type != spec.env_type:
+            return SetupResult(
+                target_url="",
+                success=False,
+                error=(
+                    f"external_topology.env_type={external.env_type!r} does not match "
+                    f"challenge env_type={spec.env_type!r}"
+                ),
+            )
+        flag_value = _expected_flag(challenge.id)
+
+        flag_err = self._seed_flag(
+            config_abs=config_abs,
+            target_ip=external.victim_internal_ip,
+            jump_host=external.jump_host,
+            jump_port=external.jump_port,
+            flag_value=flag_value,
+            spec=spec,
+        )
+        if flag_err:
+            return SetupResult(
+                target_url="",
+                success=False,
+                error=f"external-mode flag seeding failed: {flag_err}",
+            )
+
+        try:
+            key_in_workspace = self._stage_ssh_key(config_abs, challenge.id)
+        except _SshKeyStageError as exc:
+            return SetupResult(
+                target_url="",
+                success=False,
+                error=f"external-mode key staging failed: {exc}",
+            )
+
+        key_path_in_sandbox = str(key_in_workspace.relative_to(_workspace_root()))
+        ssh_config_path = self._stage_ssh_config(
+            challenge.id,
+            spec=spec,
+            jump_host=external.jump_host,
+            jump_port=external.jump_port,
+            foothold_internal_ip=external.foothold_internal_ip,
+            victim_internal_ip=external.victim_internal_ip,
+            key_path_in_sandbox=key_path_in_sandbox,
+        )
+        self._write_connect_doc(
+            challenge.id,
+            spec=spec,
+            jump_host=external.jump_host,
+            jump_port=external.jump_port,
+            foothold_internal_ip=external.foothold_internal_ip,
+            victim_internal_ip=external.victim_internal_ip,
+            flag_value=flag_value,
+            key_path_in_sandbox=key_path_in_sandbox,
+        )
+
+        log.info(
+            "MHBench external setup OK for %s — jump %s:%d, foothold %s, victim %s, "
+            "key %s, ssh_config %s",
+            challenge.id,
+            external.jump_host,
+            external.jump_port,
+            external.foothold_internal_ip,
+            external.victim_internal_ip,
+            key_in_workspace,
+            ssh_config_path,
+        )
+        return SetupResult(target_url=external.victim_internal_ip, success=True)
 
     def _post_setup(
         self,
@@ -328,7 +427,7 @@ class MHBenchProvider(BaseBenchmarkProvider):
             flag_err = self._seed_flag(
                 config_abs=config_abs,
                 target_ip=flag_target.internal_ip,
-                jump_floating_ip=snapshot.jump.floating_ip,
+                jump_host=snapshot.jump.floating_ip or snapshot.jump.internal_ip,
                 flag_value=flag_value,
                 spec=spec,
             )
@@ -344,7 +443,7 @@ class MHBenchProvider(BaseBenchmarkProvider):
             ssh_config_path = self._stage_ssh_config(
                 challenge.id,
                 spec=spec,
-                jump_floating_ip=snapshot.jump.floating_ip,
+                jump_host=snapshot.jump.floating_ip or snapshot.jump.internal_ip,
                 foothold_internal_ip=snapshot.foothold.internal_ip,
                 victim_internal_ip=flag_target.internal_ip,
                 key_path_in_sandbox=key_path_in_sandbox,
@@ -363,7 +462,7 @@ class MHBenchProvider(BaseBenchmarkProvider):
             self._write_connect_doc(
                 challenge.id,
                 spec=spec,
-                jump_floating_ip=snapshot.jump.floating_ip,
+                jump_host=snapshot.jump.floating_ip or snapshot.jump.internal_ip,
                 foothold_internal_ip=snapshot.foothold.internal_ip,
                 victim_internal_ip=flag_target.internal_ip,
                 flag_value=flag_value,
@@ -432,6 +531,14 @@ class MHBenchProvider(BaseBenchmarkProvider):
         if not challenge.mhbench_env_type or self._config_path is None:
             return
         config_abs = self._config_path.resolve()
+        # External-topology mode: operator owns the tenant lifecycle
+        # (deploy/destroy happens out-of-band). The provider must NOT
+        # invoke ``main.py teardown`` here, since (a) automated teardown
+        # would tear down VMs the operator may want to keep across runs,
+        # and (b) ``main.py teardown`` would itself fail without
+        # reachable OpenStack credentials anyway.
+        if _resolve_external_topology(config_abs) is not None:
+            return
         self._run_mhbench_cli(
             challenge.mhbench_env_type,
             config_abs,
@@ -561,9 +668,10 @@ class MHBenchProvider(BaseBenchmarkProvider):
         self,
         config_abs: Path,
         target_ip: str,
-        jump_floating_ip: str,
+        jump_host: str,
         flag_value: str,
         spec: TopologySpec,
+        jump_port: int = 22,
     ) -> str | None:
         """Run ``ansible/goals/addFlag.yml`` against the chosen victim host.
 
@@ -597,11 +705,13 @@ class MHBenchProvider(BaseBenchmarkProvider):
                 "ansible-playbook cannot authenticate to the target"
             )
 
+        port_arg = f"-p {jump_port} " if jump_port != 22 else ""
         proxy_inner = (
             f"ssh -F /dev/null -i {ssh_key_path} "
             "-o IdentitiesOnly=yes -o IdentityAgent=none "
             "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-            f"-W %h:%p {spec.jump_ssh_user}@{jump_floating_ip}"
+            f"{port_arg}"
+            f"-W %h:%p {spec.jump_ssh_user}@{jump_host}"
         )
         ssh_common = (
             "-F /dev/null "
@@ -649,11 +759,12 @@ class MHBenchProvider(BaseBenchmarkProvider):
             stderr_tail = (exc.stderr or exc.stdout or "")[-500:]
             return f"ansible-playbook rc={exc.returncode}: {stderr_tail}"
         except subprocess.TimeoutExpired:
+            jump_endpoint = f"{jump_host}:{jump_port}" if jump_port != 22 else jump_host
             return (
                 "ansible-playbook timed out after "
                 f"{self._ANSIBLE_FLAG_TIMEOUT_SECONDS}s — check SSH reachability "
                 f"to {spec.victim_ssh_user}@{target_ip} via "
-                f"{spec.jump_ssh_user}@{jump_floating_ip}"
+                f"{spec.jump_ssh_user}@{jump_endpoint}"
             )
         return None
 
@@ -686,10 +797,11 @@ class MHBenchProvider(BaseBenchmarkProvider):
         challenge_id: str,
         *,
         spec: TopologySpec,
-        jump_floating_ip: str,
+        jump_host: str,
         foothold_internal_ip: str,
         victim_internal_ip: str,
         key_path_in_sandbox: str,
+        jump_port: int = 22,
     ) -> Path:
         """Stage an ssh_config the agent can use as ``ssh -F <path> <alias>``.
 
@@ -724,10 +836,11 @@ class MHBenchProvider(BaseBenchmarkProvider):
             "    ServerAliveInterval 30\n"
             "\n"
             "Host jump\n"
-            f"    HostName {jump_floating_ip}\n"
+            f"    HostName {jump_host}\n"
             f"    User {spec.jump_ssh_user}\n"
             f"    IdentityFile {key_path}\n"
-            "\n"
+            + (f"    Port {jump_port}\n" if jump_port != 22 else "")
+            + "\n"
             "Host foothold\n"
             f"    HostName {foothold_internal_ip}\n"
             f"    User {spec.foothold_ssh_user}\n"
@@ -750,11 +863,12 @@ class MHBenchProvider(BaseBenchmarkProvider):
         challenge_id: str,
         *,
         spec: TopologySpec,
-        jump_floating_ip: str,
+        jump_host: str,
         foothold_internal_ip: str,
         victim_internal_ip: str,
         flag_value: str,
         key_path_in_sandbox: str,
+        jump_port: int = 22,
     ) -> None:
         """Drop a foothold-first connection brief into the engagement workspace.
 
@@ -784,8 +898,9 @@ class MHBenchProvider(BaseBenchmarkProvider):
             f"- Victim / flag-target host (tenant-internal IP): "
             f"`{spec.victim_ssh_user}@{victim_internal_ip}` (sudo to "
             f"`{spec.flag_owner}` for the flag)\n"
-            f"- Jump host (only VM with an external floating IP): "
-            f"`{spec.jump_ssh_user}@{jump_floating_ip}`\n"
+            f"- Jump host (external SSH entrypoint): "
+            f"`{spec.jump_ssh_user}@{jump_host}"
+            f"{':' + str(jump_port) if jump_port != 22 else ''}`\n"
             f"- Staged ssh_config (use this for every SSH): `{config_path}`\n"
             f"- Staged private key: `/workspace/{key_path_in_sandbox}`\n"
             f"- Flag location on the victim: `{spec.flag_path}`\n"
@@ -879,6 +994,68 @@ def _resolve_ssh_key_path(config_abs: Path) -> Path | None:
     if not isinstance(raw, str) or not raw:
         return None
     return Path(os.path.expanduser(raw)).resolve()
+
+
+@dataclass(frozen=True)
+class ExternalTopology:
+    """Operator-provided endpoint info for an already-deployed topology.
+
+    Use when Decepticon's stack runs on a different machine than the
+    OpenStack tenant — e.g., local workstation attacking a cloud-hosted
+    DevStack via a NAT'd jump port. Populated from the optional
+    ``external_topology`` section of MHBench's ``config.json``:
+
+    .. code-block:: json
+
+        {
+          "openstack_config": {"ssh_key_path": "/abs/path/to/perry_key"},
+          "external_topology": {
+            "env_type": "Chain2Hosts",
+            "jump_host": "34.22.81.182",
+            "jump_port": 22220,
+            "foothold_internal_ip": "192.168.202.100",
+            "victim_internal_ip": "192.168.200.11"
+          }
+        }
+
+    Presence of this section switches :class:`MHBenchProvider` into
+    external mode (skip ``main.py setup`` + OpenStack discovery; trust
+    the operator's IPs; teardown is a no-op).
+    """
+
+    env_type: str
+    jump_host: str
+    jump_port: int
+    foothold_internal_ip: str
+    victim_internal_ip: str
+
+
+def _resolve_external_topology(config_abs: Path) -> ExternalTopology | None:
+    """Read optional ``external_topology`` section from MHBench config.json.
+
+    Returns ``None`` when the section is absent (= automated mode).
+    Raises no exceptions; malformed entries silently degrade to ``None``
+    so the operator gets the standard "config not found" / discovery
+    errors from automated mode rather than a cryptic parse failure here.
+    """
+    try:
+        with config_abs.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    section = data.get("external_topology")
+    if not isinstance(section, dict):
+        return None
+    try:
+        return ExternalTopology(
+            env_type=str(section["env_type"]),
+            jump_host=str(section["jump_host"]),
+            jump_port=int(section["jump_port"]),
+            foothold_internal_ip=str(section["foothold_internal_ip"]),
+            victim_internal_ip=str(section["victim_internal_ip"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _select_flag_target(victims: tuple[HostInfo, ...], selector: str) -> HostInfo:
