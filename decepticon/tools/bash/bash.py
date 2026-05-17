@@ -55,6 +55,50 @@ SCRATCH_TTL_MINUTES = 60
 SCRATCH_PRUNE_INTERVAL = 600  # seconds between prune attempts (per process)
 _scratch_prune_state: dict[str, float] = {}
 
+# ─── Passive-read stale-poll detection ────────────────────────────────────
+# Empty-command `bash` and `bash_output` are passive reads: they sample the
+# session state without sending input. When the agent runs N consecutive
+# passive reads on the same session and the underlying output is unchanged
+# every time, the session is wedged (or the background job has gone quiet)
+# and further polling cannot unwedge it — the documented next step is to
+# kill and pivot. Track per-(workspace, session) hashes and inject a [STALE]
+# hint once the threshold is hit. Resets on any state-changing event:
+# non-empty command, output diff, kill, or new background job.
+_STALE_PASSIVE_READS = 3  # consecutive identical reads before [STALE] hint
+_passive_read_state: dict[tuple[str, str], list[str]] = {}
+
+
+def _passive_key(workspace_path: str, session: str) -> tuple[str, str]:
+    return (workspace_path, session)
+
+
+def _track_passive_read(workspace_path: str, session: str, output: str) -> str | None:
+    """Record a passive read; return [STALE] hint when threshold tripped."""
+    key = _passive_key(workspace_path, session)
+    digest = hashlib.sha256(output.encode("utf-8", errors="replace")).hexdigest()[:16]
+    hashes = _passive_read_state.setdefault(key, [])
+    hashes.append(digest)
+    del hashes[: max(0, len(hashes) - _STALE_PASSIVE_READS)]
+    if len(hashes) < _STALE_PASSIVE_READS or len(set(hashes)) != 1:
+        return None
+    return (
+        f"\n\n[STALE] session='{session}' returned identical output across "
+        f"{_STALE_PASSIVE_READS} consecutive passive reads. Either the shell "
+        f"is wedged or the background job is quiet — further polling cannot "
+        f"unwedge it. Pivot now:\n"
+        f"  (a) bash_kill('{session}') and try a different attack vector;\n"
+        f"  (b) read the underlying log file directly "
+        f"(e.g. cat .sessions/{session}.log) to confirm progress before resuming;\n"
+        f"  (c) only continue waiting if a SEPARATE operation is making "
+        f"concrete progress.\n"
+    )
+
+
+def _reset_passive_read(workspace_path: str, session: str) -> None:
+    """Clear the stale-poll counter on any state-changing event."""
+    _passive_read_state.pop(_passive_key(workspace_path, session), None)
+
+
 # ─── ANSI escape code pattern ────────────────────────────────────────────
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]")
 
@@ -289,6 +333,7 @@ async def bash(
 
     # Background mode: send command and return immediately
     if background and command:
+        _reset_passive_read(workspace_path, session)
         await asyncio.to_thread(
             _sandbox.start_background,
             command=command,
@@ -302,6 +347,12 @@ async def bash(
             f'Inspect early progress with bash_output(session="{session}").'
         )
 
+    # Stale-poll tracking: empty command + is_input=False is a passive read.
+    # Any state-changing path (non-empty command, control sequence) resets.
+    is_passive_read = not command and not is_input
+    if not is_passive_read:
+        _reset_passive_read(workspace_path, session)
+
     result = await _sandbox.execute_tmux_async(
         command=command,
         session=session,
@@ -312,6 +363,11 @@ async def bash(
 
     # Sanitize: surrogates → ANSI strip → repetitive line compression
     result = _sanitize_output(result)
+
+    if is_passive_read:
+        hint = _track_passive_read(workspace_path, session, result)
+        if hint:
+            result = result + hint
 
     # Multi-tier output management:
     # Tier 1 (≤15K): return inline — fits comfortably in context
@@ -358,12 +414,14 @@ async def bash_output(session: str = "main", config: RunnableConfig | None = Non
     diff = _sanitize_output(diff_raw) if diff_raw else ""
 
     if job is None:
+        _reset_passive_read(workspace_path, session)
         if diff:
             return f"[IDLE] No background job in session '{session}'.\n{diff}"
         return f"[IDLE] No background job in session '{session}'."
 
     if job.status == "done":
         _sandbox._jobs.mark_consumed(session, key=job.key)
+        _reset_passive_read(workspace_path, session)
         hint = _interpret_exit_code(job.exit_code) if job.exit_code is not None else ""
         body = diff if diff else "(no new output)"
         return (
@@ -372,9 +430,19 @@ async def bash_output(session: str = "main", config: RunnableConfig | None = Non
         )
 
     body = diff if diff else "(no new output yet)"
-    return (
+    response = (
         f"[RUNNING elapsed={job.elapsed:.1f}s] session='{session}' command='{job.command}'\n{body}"
     )
+    # Track on the stable "no new bytes" signal — NOT the full response, whose
+    # elapsed-time string changes every poll and would prevent the counter from
+    # ever advancing.
+    if not diff:
+        stale_hint = _track_passive_read(workspace_path, session, "<<NO_NEW_BYTES>>")
+        if stale_hint:
+            response = response + stale_hint
+    else:
+        _reset_passive_read(workspace_path, session)
+    return response
 
 
 @tool
@@ -394,6 +462,7 @@ async def bash_kill(session: str, config: RunnableConfig | None = None) -> str:
     await asyncio.to_thread(
         _sandbox.kill_session, session, **_with_workspace_kwargs(workspace_path)
     )
+    _reset_passive_read(workspace_path, session)
     log_path = _sandbox.session_log_path(session, workspace_path)
     return f"[KILLED] session '{session}' terminated. Log preserved at {log_path}."
 

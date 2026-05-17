@@ -69,13 +69,23 @@ We're building Decepticon toward an **Offensive Vaccine** for the AI-driven thre
 
 ## Benchmark Results
 
+<div align="center">
+  <img src="assets/benchmark/decepticon_donut.png" alt="Decepticon — XBOW pass rate 102/104 (98.08%)" width="560">
+</div>
+
+**102 / 104 (98.08 %)** on the [XBOW Validation Benchmark](https://github.com/xbow-engineering/validation-benchmarks) — 104 web-app CTF challenges spanning three difficulty tiers, used by AI-pentest projects across the industry to compare end-to-end exploitation capability.
+
 | Benchmark | Difficulty | Pass Rate |
 |-----------|------------|-----------|
 | [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | Easy (Level 1)   | **45 / 45** (100 %) |
-| [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | Medium (Level 2) | **49 / 51** (96.1 %) *in progress* |
-| [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | Hard (Level 3)   | **7 / 8** (87.5 %) *in progress* |
+| [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | Medium (Level 2) | **50 / 51** (98.0 %) |
+| [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | Hard (Level 3)   | **7 / 8** (87.5 %) |
+| [XBOW validation-benchmarks](https://github.com/PurpleAILAB/xbow-validation-benchmarks) | **All levels**   | **102 / 104** (98.08 %) |
 
-→ **[Full benchmark index](benchmark/results/README.md)**
+**Methodology** — black-box environment (no source code, no config, no service internals) **with the per-challenge `Vulnerability tags:` provided to the agent as a hint** — the same metadata `xbow-engineering/validation-benchmarks` ships in each challenge's `benchmark.yaml`. The agent discovers endpoints, parameters, sinks, payloads, and gadgets on its own; the tags only narrow the attack-class search space.
+
+- **[Full per-challenge index, attack-class matrix, and LangSmith traces](benchmark/results/README.md)**
+- **[Comparison vs other AI pentest agents (Strix, PentestGPT, MAPTA, Cyber-AutoAgent, XBOW commercial, …)](docs/benchmark-comparison.md)**
 
 ---
 

@@ -3,10 +3,13 @@
 Side-by-side numbers for AI / LLM pentesting agents that have **publicly released results on the
 [XBOW Validation Benchmark](https://github.com/xbow-engineering/validation-benchmarks)** (104 web-app CTF challenges, 3 difficulty tiers).
 
-- **Decepticon mode:** **black-box** (no source / config / hints).
-- **Decepticon status:** L1 + L3 done, **L2 sweep in progress** — Decepticon's number is interim.
+<div align="center">
+  <img src="../assets/benchmark/leaderboard.png" alt="XBOW leaderboard — Decepticon at 98.08 %" width="780">
+</div>
 
-![XBOW leaderboard](../assets/benchmark/leaderboard.png)
+- **Decepticon mode** — black-box (no source code, no config, no service internals) **with the per-challenge `Vulnerability tags:` provided to the agent as a hint** — the same metadata that `xbow-engineering/validation-benchmarks` ships in each challenge's `benchmark.yaml`. The agent discovers endpoints, parameters, sinks, payloads, and gadgets on its own; the tags only narrow the attack-class search space. Other systems in this leaderboard report whichever hint regime their authors selected — read their primary sources before pixel-matching the pass rates.
+- **Decepticon status** — cycle-4 final · 102 / 104 (98.08 %). L1 complete; L2 50/51 (one outstanding); L3 7/8 (one outstanding).
+- **Per-challenge evidence + LangSmith traces** — [`benchmark/results/README.md`](../benchmark/results/README.md).
 
 ## Leaderboard
 
@@ -19,7 +22,7 @@ Side-by-side numbers for AI / LLM pentesting agents that have **publicly release
 |  5 | **XBOW** (commercial)                | **≈85 %**               | black-box, proprietary    | [xbow.com/blog/benchmarks](https://xbow.com/blog/benchmarks) |
 |  6 | **Cyber-AutoAgent** (westonbrown)    | **84.62 %** (88 / 104) — v0.1.3 [archived]; 81 % v0.1.1; 45.92 % (45/98) v0.1.0 | black-box, meta-agent | [github](https://github.com/westonbrown/Cyber-AutoAgent) |
 |  7 | **MAPTA**                            | **76.9 %** (80 / 104)   | black-box, multi-agent    | arXiv [2508.20816](https://arxiv.org/abs/2508.20816) |
-|  8 | **Decepticon** *(this repo)*         | **L1: 100 %** (45/45) · L2: 96.1 % (49/51) · L3: 87.5 % (7/8) — interim 101 / 104 (97.1 %) | **black-box**, LangGraph multi-agent | [github](https://github.com/PurpleAILAB/Decepticon) |
+|  8 | **Decepticon** *(this repo)*         | **98.08 %** (102 / 104) — L1: 100 % (45/45) · L2: 98.0 % (50/51) · L3: 87.5 % (7/8) | **black-box**, LangGraph multi-agent | [github](https://github.com/PurpleAILAB/Decepticon) |
 |  9 | PentestAgent                         | 50.0 % [^retest]        | black-box                 | arXiv 2411.05185; re-tested in Red-MIRROR |
 | 10 | AutoPT                               | 46.0 % [^retest]        | black-box                 | re-tested in Red-MIRROR |
 | 11 | VulnBot                              |  6.0 % [^retest]        | black-box, baseline       | arXiv [2501.13411](https://arxiv.org/abs/2501.13411); re-tested in Red-MIRROR |
@@ -37,7 +40,7 @@ Side-by-side numbers for AI / LLM pentesting agents that have **publicly release
 |---|---|---|---|---|
 | **Strix**       | 45 / 45 — **100 %**  | 49 / 51 — **96 %**           | 6 / 8 — 75 %      | **96.15 %** |
 | **PentestGPT**  | 42 / 46 — 91.1 %     | 43 / 50 — 74.5 %             | 5 / 8 — 62.5 %    | **86.5 %**  |
-| **Decepticon**  | **45 / 45 — 100 %**  | **49 / 51 — 96.1 %** *(in progress)* | **7 / 8 — 87.5 %** *(in progress)* | **97.1 %** (101 / 104) *(L2/L3 ongoing)* |
+| **Decepticon**  | **45 / 45 — 100 %**  | **50 / 51 — 98.0 %**  | **7 / 8 — 87.5 %**  | **98.08 %** (102 / 104) |
 
 PentestGPT per-level avg cost / time: L1 $0.65 / 4.4 min · L2 $1.33 / 6.9 min · L3 $3.03 / 12.9 min (median across all 104: $0.42 / 3.3 min).
 XBOW commercial does not publish a per-difficulty breakdown for its own agent — only the headline 85 % vs the senior pentester's 85 % in 40 hours.

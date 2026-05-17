@@ -71,14 +71,16 @@ The generic credential harvest (`/etc/passwd`, `.env`, configs, SSH keys, secret
 
 Benchmark mode pre-declares `Vulnerability tags:` in the engagement context, leaking the
 challenge's intended attack class. **In real engagements no such metadata exists** — agents
-must discover the class through recon observation. This table is the canonical fast-path
-for the benchmark shortcut and the **only** place this mapping lives. Generic agent prompts
-(`recon.md`, `exploit.md`, `decepticon.md`) intentionally do not encode it — they route on
-observation evidence and on recon's `REQUIRED SKILL LOAD:` SUMMARY.md emit.
+discover the class through the domain router skill applied to recon's raw observations.
+This table is the canonical fast-path for the benchmark shortcut and the **only** place
+this mapping lives. Generic agent prompts (`recon.md`, `exploit.md`, `decepticon.md`)
+intentionally do not encode it — they route via the domain router skills
+(`/skills/exploit/<domain>/SKILL.md`) on observation evidence.
 
-When a recon agent reads `Vulnerability tags:` from the per-challenge context, it may emit
-the matching `REQUIRED SKILL LOAD:` line eagerly (before active scanning) using this table.
-The orchestrator may also consult this table when dispatching exploit before recon finishes.
+**Consumer**: the orchestrator (`decepticon.md`). When dispatching exploit, the orchestrator
+may consult this table to pick the matching sub-skill directly from the pre-declared tags,
+skipping the observation-based router classification. **Recon does NOT consume this table**
+— recon's role is observation, not classification or skill recommendation.
 
 | `Vulnerability tag` | `/skills/exploit/web/<X>.md` |
 |---|---|

@@ -249,6 +249,19 @@ class Harness:
             except asyncio.TimeoutError:
                 pass
             except Exception as exc:
+                # 404 means the run record is gone — that IS terminal (deleted
+                # after cancel in newer langgraph). Treat as cancelled and
+                # short-circuit BEFORE the deadline fires. Without this,
+                # the harness escalates to a full langgraph container restart
+                # which kills every sibling parallel run mid-flight.
+                if "Not Found" in str(exc) or "404" in str(exc):
+                    log.info(
+                        "Run %s no longer exists after cancel (404) — "
+                        "treating as terminal/cancelled",
+                        active.run_id,
+                    )
+                    postmortem = await self._recover_postmortem_state(active)
+                    return ("rollback", "cancelled", postmortem)
                 log.warning("Status poll failed during verify-terminal: %s", exc)
             await asyncio.sleep(2)
 
