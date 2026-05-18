@@ -154,9 +154,16 @@ dev:
 	$(COMPOSE_WATCH) watch
 
 ## CLI locally (Node) — backend stays in Docker with hot-reload sync.
+##
+## Build chain: shared/streaming dist → cli dist → run.
+## `npm run dev` only watches tsc; `node --watch` re-execs on dist changes.
+## Both watchers run as background jobs; `wait` keeps the target alive so
+## Ctrl-C tears both down cleanly.
 cli-dev: infra
 	@$(COMPOSE_WATCH) watch --no-up --quiet langgraph &
-	cd clients/cli && DECEPTICON_API_URL=$${DECEPTICON_API_URL:-http://localhost:2024} npm run dev
+	npm run build --workspace=@decepticon/streaming
+	cd clients/cli && npm run build
+	cd clients/cli && (npm run dev & DECEPTICON_API_URL=$${DECEPTICON_API_URL:-http://localhost:2024} node --watch dist/index.js & wait)
 
 ## Next.js dev server locally — infra stays in Docker with hot-reload.
 web-dev: infra web-db-ensure
@@ -192,6 +199,9 @@ lint-fix:
 	uv run ruff format .
 
 quality-cli: node-install
+	# streaming workspace must be built first — its package.json main
+	# resolves to dist/, which cli's typecheck + build consume.
+	npm run build --workspace=@decepticon/streaming
 	npm run typecheck --workspace=@decepticon/cli
 	npm run build --workspace=@decepticon/cli
 	npm run test --workspace=@decepticon/cli

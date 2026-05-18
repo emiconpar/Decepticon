@@ -214,6 +214,12 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # @decepticon/streaming now ships as a built ESM package
+      # (package.json main → dist/index.js). cli's tsc + web's next build
+      # resolve the workspace by walking that main, so the dist has to
+      # exist before either downstream build runs.
+      - name: Build shared streaming workspace
+        run: npm run build --workspace=@decepticon/streaming
       - run: cd clients/cli && npm run typecheck
       - name: Run CLI tests
         run: cd clients/cli && npm test --if-present
@@ -231,6 +237,8 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - name: Build shared streaming workspace
+        run: npm run build --workspace=@decepticon/streaming
       - name: Generate Prisma client
         run: cd clients/web && npx prisma generate
       - name: Lint
@@ -293,6 +301,13 @@ jobs:
           tags: decepticon-${{ matrix.image }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=${{ github.event_name == 'push' && 'max' || 'min' }}
+      # Informational scan. The hotfix scope (1.0.27) keeps this as a
+      # SARIF-only artifact while we (a) curate a .trivyignore for the
+      # ~20 Go-stdlib / Debian-advisory CRITICAL findings surfaced by
+      # this gate and (b) decide whether they need base-image upgrades.
+      # Hard-fail enforcement was attempted in this PR but the existing
+      # base images (langgraph, cli) ship CRITICAL CVEs that can't be
+      # fixed in a hotfix window — moved to a follow-up supply-chain PR.
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
@@ -331,6 +346,12 @@ jobs:
         run: uv export --locked --format requirements-txt --no-hashes --no-dev > requirements.txt
       - name: Run pip-audit
         run: uv tool run pip-audit --requirement requirements.txt --ignore-vuln GHSA-xxxx-xxxx-xxxx || true
+      # gitleaks-action v2 requires a paid org license; until
+      # GITLEAKS_LICENSE is provisioned (or the step is swapped for
+      # the binary action / trufflehog) the action exits 1 on the
+      # license probe and would block every PR. Hard-fail enforcement
+      # for committed secrets is deferred to the follow-up
+      # supply-chain PR that handles the license + scanner swap.
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         continue-on-error: true
