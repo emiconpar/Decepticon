@@ -21,7 +21,7 @@ def test_initialize_does_not_create_root_workspace_sessions_log():
 
     with (
         patch.object(mgr, "_docker_tmux") as mock_tmux,
-        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("decepticon.sandbox_kernel.base.subprocess.run") as mock_run,
         patch("time.sleep"),
     ):
         mock_tmux.side_effect = [
@@ -51,7 +51,7 @@ def test_initialize_pipes_pane_to_engagement_scoped_sessions_log():
 
     with (
         patch.object(mgr, "_docker_tmux") as mock_tmux,
-        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("decepticon.sandbox_kernel.base.subprocess.run") as mock_run,
         patch("time.sleep"),
     ):
         mock_tmux.side_effect = [
@@ -87,7 +87,7 @@ def test_initialize_creates_sessions_directory_inside_engagement_workspace():
 
     with (
         patch.object(mgr, "_docker_tmux") as mock_tmux,
-        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("decepticon.sandbox_kernel.base.subprocess.run") as mock_run,
         patch("time.sleep"),
     ):
         mock_tmux.side_effect = [RuntimeError("session not found"), "", "", "", "", "", ""]
@@ -120,7 +120,7 @@ def test_initialize_warns_when_mkdir_fails(caplog):
     try:
         with (
             patch.object(mgr, "_docker_tmux") as mock_tmux,
-            patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+            patch("decepticon.sandbox_kernel.base.subprocess.run") as mock_run,
             patch("time.sleep"),
         ):
             mock_tmux.side_effect = [RuntimeError("session not found"), "", "", "", "", "", ""]
@@ -383,7 +383,7 @@ def test_execute_async_poll_loop_capture_timeout_continues():
         patch.object(mgr, "_capture", side_effect=fake_capture),
         patch.object(mgr, "_send", return_value=None),
         patch.object(mgr, "initialize", return_value=None),
-        patch("decepticon.backends.docker_sandbox.POLL_INTERVAL", 0.01),
+        patch("decepticon.sandbox_kernel.tmux.POLL_INTERVAL", 0.01),
     ):
         result = asyncio.run(mgr.execute_async(command="ls", is_input=False, timeout=1))
 
@@ -421,8 +421,8 @@ def test_poll_loop_capture_errors_dont_falsely_trigger_stall_detection():
         patch.object(mgr, "_send", return_value=None),
         patch.object(mgr, "_clear_screen", return_value=None),
         patch.object(mgr, "initialize", return_value=None),
-        patch("decepticon.backends.docker_sandbox.POLL_INTERVAL", 0.01),
-        patch("decepticon.backends.docker_sandbox.STALL_SECONDS", 0.05),
+        patch("decepticon.sandbox_kernel.tmux.POLL_INTERVAL", 0.01),
+        patch("decepticon.sandbox_kernel.tmux.STALL_SECONDS", 0.05),
     ):
         result = asyncio.run(mgr.execute_async(command="ls", is_input=False, timeout=2))
 
@@ -440,7 +440,7 @@ def test_initialize_recreates_stale_cached_pane_without_error_string_matching():
 
     with (
         patch.object(mgr, "_docker_tmux") as mock_tmux,
-        patch("decepticon.backends.docker_sandbox.subprocess.run") as mock_run,
+        patch("decepticon.sandbox_kernel.base.subprocess.run") as mock_run,
         patch("time.sleep"),
     ):
         mock_tmux.side_effect = [

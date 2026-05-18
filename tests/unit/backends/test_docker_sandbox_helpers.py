@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from decepticon.backends import docker_sandbox as ds
-from decepticon.backends.docker_sandbox import (
+from decepticon.sandbox_kernel.tmux import (
     MAX_OUTPUT_CHARS,
     PS1_PATTERN,
     TmuxSessionManager,

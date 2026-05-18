@@ -33,7 +33,8 @@ import time
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from decepticon.backends.docker_sandbox import DockerSandbox, _interpret_exit_code
+from decepticon.backends.docker_sandbox import DockerSandbox
+from decepticon.sandbox_kernel.tmux import _interpret_exit_code
 
 log = logging.getLogger("decepticon.tools.bash.bash")
 

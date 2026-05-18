@@ -46,7 +46,7 @@ from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 
 from decepticon.agents._benchmark_mode import benchmark_skill_sources
 from decepticon.agents.prompts import load_prompt
-from decepticon.backends import DockerSandbox
+from decepticon.backends import build_sandbox_backend
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
@@ -74,12 +74,12 @@ def create_decepticon_agent():
     llm = factory.get_model("decepticon")
     fallback_models = factory.get_fallback_models("decepticon")
 
-    # DockerSandbox here only backs FilesystemMiddleware (read/write
-    # engagement docs). The orchestrator has tools=[], so the bash module's
-    # global _sandbox is set by sub-agent factories when they execute.
-    sandbox = DockerSandbox(
-        container_name=config.docker.sandbox_container_name,
-    )
+    # Filesystem backend for the orchestrator. The orchestrator has
+    # tools=[], so it never touches the bash module's global _sandbox —
+    # sub-agent factories set that for their own execution. Backend
+    # selection mirrors Soundwave: DockerSandbox by default, HTTPSandbox
+    # when DECEPTICON_FILESYSTEM_BACKEND=http (see backends/factory.py).
+    sandbox = build_sandbox_backend(config.docker.sandbox_container_name)
 
     system_prompt = load_prompt("decepticon")
 

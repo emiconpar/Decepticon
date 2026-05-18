@@ -177,8 +177,8 @@ def test_auto_background_path_registers_job():
 
     with (
         patch.object(sandbox, "_get_manager") as mock_get,
-        patch("decepticon.backends.docker_sandbox.AUTO_BACKGROUND_SECONDS", 0.0),
-        patch("decepticon.backends.docker_sandbox.POLL_INTERVAL", 0.01),
+        patch("decepticon.sandbox_kernel.tmux.AUTO_BACKGROUND_SECONDS", 0.0),
+        patch("decepticon.sandbox_kernel.tmux.POLL_INTERVAL", 0.01),
     ):
         mgr = MagicMock()
         mgr.session = "long"

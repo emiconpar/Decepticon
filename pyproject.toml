@@ -48,6 +48,15 @@ dependencies = [
     # HTTP
     "httpx>=0.27.0",
     "deepagents>=0.5.0",
+    # Sandbox HTTP daemon — the FastAPI app that ships inside the
+    # sandbox container and that `HTTPSandbox` (decepticon/backends/
+    # http_sandbox.py) talks to. Carried in the main install set
+    # because the sandbox container mounts decepticon as
+    # /deps/decepticon and runs `python -m decepticon.sandbox_server`
+    # as its entrypoint; the agent process imports nothing from these
+    # at runtime.
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
     # CLI
     "typer[all]>=0.9.0",
     "xxhash>=3.0.0",

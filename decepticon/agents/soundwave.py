@@ -29,7 +29,7 @@ from langchain.agents.middleware import ModelFallbackMiddleware
 from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 
 from decepticon.agents.prompts import load_prompt
-from decepticon.backends import DockerSandbox
+from decepticon.backends import build_sandbox_backend
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
 from decepticon.middleware import EngagementContextMiddleware, FilesystemMiddleware
@@ -52,10 +52,11 @@ def create_soundwave_agent():
     llm = factory.get_model("soundwave")
     fallback_models = factory.get_fallback_models("soundwave")
 
-    # DockerSandbox as shared filesystem — other agents read soundwave output here
-    sandbox = DockerSandbox(
-        container_name=config.docker.sandbox_container_name,
-    )
+    # Filesystem backend — DockerSandbox by default (dev / per-engagement
+    # VM), HTTPSandbox when DECEPTICON_FILESYSTEM_BACKEND=http (Cloud Run
+    # multi-container deploys where there's no host docker daemon). See
+    # decepticon/backends/factory.py for the env contract.
+    sandbox = build_sandbox_backend(config.docker.sandbox_container_name)
 
     system_prompt = load_prompt("soundwave")
     # Skills + workspace both live inside the sandbox (skills bind-mounted at /skills/).
