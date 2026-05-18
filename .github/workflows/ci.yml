@@ -293,13 +293,31 @@ jobs:
           tags: decepticon-${{ matrix.image }}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=${{ github.event_name == 'push' && 'max' || 'min' }}
-      - name: Trivy image scan
+      # CRITICAL-only hard gate. HIGH stays available in the separate
+      # informational step below — the ratio of HIGH false-positives in
+      # third-party base images (Kali rolling, node-slim) is too high to
+      # block merges on without a curated allowlist.
+      - name: Trivy image scan (CRITICAL gate)
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: decepticon-${{ matrix.image }}:ci
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
-          severity: CRITICAL,HIGH
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      # Informational HIGH scan — reports to SARIF but never blocks merges.
+      # Output filename is suffixed so the CRITICAL SARIF artifact upload
+      # above isn't overwritten.
+      - name: Trivy image scan (HIGH report)
+        if: always()
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: decepticon-${{ matrix.image }}:ci
+          format: sarif
+          output: trivy-${{ matrix.image }}-high.sarif
+          severity: HIGH
           ignore-unfixed: true
           exit-code: "0"
       - name: Upload Trivy SARIF
@@ -331,9 +349,11 @@ jobs:
         run: uv export --locked --format requirements-txt --no-hashes --no-dev > requirements.txt
       - name: Run pip-audit
         run: uv tool run pip-audit --requirement requirements.txt --ignore-vuln GHSA-xxxx-xxxx-xxxx || true
+      # Secret leakage is a hard-fail. The Trivy/pip-audit asymmetry above
+      # (information vs gate) does not apply here — a committed secret is
+      # never a false positive worth tolerating.
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
         env:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
