@@ -80,7 +80,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 			ref = config.Get(env, "DECEPTICON_BRANCH", "main")
 		}
 		ui.Info("Downloading configuration files...")
-		if err := updater.SyncConfigFiles(ref); err != nil {
+		// release == nil here: this branch only triggers when compose
+		// files are missing on launch (e.g. user wiped ~/.decepticon), so
+		// we lack the prefetched Release object that ApplyUpdate carries.
+		// SyncConfigFiles falls back to unverified download with a
+		// warning — the install.sh path is the verified-by-default entry.
+		if err := updater.SyncConfigFiles(ref, nil); err != nil {
 			return fmt.Errorf("sync config: %w", err)
 		}
 	}

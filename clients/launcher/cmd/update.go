@@ -64,7 +64,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		// --force: re-sync config + re-pull images without bumping the
 		// binary (already on release.TagName).
 		ui.Info("Syncing configuration files...")
-		if err := updater.SyncConfigFiles(ref); err != nil {
+		// Mirror ApplyUpdate's release/branch split: pass the Release
+		// through when ref tracks the tag so the manifest verifies, nil
+		// when DECEPTICON_BRANCH is overriding the ref (branch mode).
+		syncRelease := release
+		if ref != release.TagName && ref != strings.TrimPrefix(release.TagName, "v") {
+			syncRelease = nil
+		}
+		if err := updater.SyncConfigFiles(ref, syncRelease); err != nil {
 			ui.Warning("Config sync: " + err.Error())
 		}
 		c := compose.New()
