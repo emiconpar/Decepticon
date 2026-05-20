@@ -37,6 +37,19 @@ from pathlib import Path
 
 _PROMPTS_DIR = Path(__file__).parent
 
+# Search order for prompt fragment lookup. ``_read_fragment(name)`` tries
+# each base directory in order, returning the first ``<base>/<name>.md``
+# that exists. The top-level dir holds cross-cutting fragments
+# (``language.md``); ``standard/`` and ``plugins/`` hold per-agent
+# prompts mirroring the bundle split applied to ``decepticon/agents/``
+# and ``skills/``. External plugin packages ship their own prompts via
+# their own ``importlib.resources`` lookups; this list is OSS-internal.
+_PROMPT_SEARCH_PATHS: tuple[Path, ...] = (
+    _PROMPTS_DIR,
+    _PROMPTS_DIR / "standard",
+    _PROMPTS_DIR / "plugins",
+)
+
 # ── Cache boundary marker ────────────────────────────────────────────────────
 # Inserted between static and dynamic sections. Anthropic's prompt caching
 # heuristic uses this to determine the cacheable prefix boundary.
@@ -100,14 +113,16 @@ You are an analyst and collaborator, not just a tool executor. This means:
 </ANALYST_MINDSET>"""
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=32)
 def _read_fragment(name: str) -> str:
-    """Read and cache a prompt fragment file."""
-    path = _PROMPTS_DIR / f"{name}.md"
-    if not path.exists():
-        msg = f"Shared prompt fragment not found: {path}"
-        raise FileNotFoundError(msg)
-    return path.read_text(encoding="utf-8")
+    """Read and cache a prompt fragment file from any configured search path."""
+    for base in _PROMPT_SEARCH_PATHS:
+        path = base / f"{name}.md"
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    searched = ", ".join(str(p / f"{name}.md") for p in _PROMPT_SEARCH_PATHS)
+    msg = f"Prompt fragment not found: {name}.md (searched: {searched})"
+    raise FileNotFoundError(msg)
 
 
 def _get_tool_prompt(tool_name: str, role: str | None = None) -> str:
