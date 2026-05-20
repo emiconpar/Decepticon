@@ -8,7 +8,8 @@
 #   - The OSS installer (`scripts/install.sh`) does NOT download this
 #     file, so end users running the launcher (`decepticon start`) get
 #     only the base `docker-compose.yml` from `~/.decepticon/`. Skills
-#     are baked into the sandbox image — no host-side `./skills/`
+#     are baked into the LANGGRAPH image (see
+#     containers/langgraph.Dockerfile) — no host-side `./skills/`
 #     directory is needed.
 #
 # Where to put YOUR overrides depends on which stack you are running:
@@ -22,9 +23,10 @@
 #
 # Developers who clone the repo (`make dev`, `make cli-dev`, benchmark
 # harness, etc.) get the bind mount below, which shadows the baked
-# /skills/ in the running container with the working-tree copy. That
-# makes skill edits hot-visible to the agent without rebuilding the
-# sandbox image.
+# /app/skills/ in the LANGGRAPH container with the working-tree copy.
+# That makes skill edits hot-visible to the agent without rebuilding
+# the langgraph image. Skills are READ-ONLY knowledge — the agent
+# never writes back to /app/skills/, so ``:ro`` is safe.
 #
 # To temporarily test the OSS path on a dev clone, override the merge:
 #   docker compose -f docker-compose.yml up
@@ -34,8 +36,10 @@
 # proposed direction on resolving this dual-config surface.
 
 services:
-  sandbox:
+  langgraph:
     volumes:
       # Read-only bind: the agent never writes back into the skill library;
-      # the host is the source of truth during development.
-      - ./skills:/skills:ro
+      # the host is the source of truth during development. Skills are read
+      # in-process by FilesystemBackend via the CompositeBackend route in
+      # ``decepticon/backends/__init__.py:make_agent_backend``.
+      - ./skills:/app/skills:ro

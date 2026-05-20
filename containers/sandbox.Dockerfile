@@ -106,21 +106,14 @@ ENV PYTHONPATH=/opt
 # and unrestricted filesystem access during red team operations.
 WORKDIR /workspace
 
-# Skill library — baked at /skills/ so every agent (recon, exploit, analyst,
-# detector, soundwave, ...) can resolve `/skills/<category>/<skill>/SKILL.md`
-# via the load_skill tool without depending on a host-side bind mount. The
-# OSS install path doesn't ship skills/ to disk, so without this COPY the
-# sandbox container would expose an empty /skills/ and every agent prompt
-# referencing a skill file would fail.
-#
-# Devs iterating on skill content override this at runtime via the
-# `./skills:/skills:ro` bind mount in docker-compose.override.yml — that
-# file is committed but not downloaded by install.sh, so OSS users
-# automatically get the baked-in skills and devs get hot-edits.
-#
-# Placed after the heavy apt-install layer so a skill-only edit invalidates
-# only this thin trailing layer.
-COPY skills/ /skills/
+# Skills are NO LONGER baked into the sandbox image. They live in the
+# langgraph container (see ``containers/langgraph.Dockerfile``), where
+# they are read in-process by ``FilesystemBackend`` via the
+# ``CompositeBackend`` route declared in
+# ``decepticon/backends/__init__.py:make_agent_backend``. Skills are
+# read-only knowledge — they don't need the sandbox's isolated
+# execution environment, and avoiding the HTTP round-trip per skill
+# read saves agent-init latency.
 
 # Entrypoint: chmod 777 /workspace so host user can access files without sudo.
 # Security boundary is the container, not file permissions.

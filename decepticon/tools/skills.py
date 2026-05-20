@@ -6,26 +6,6 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-
-def _unwrap_backend(backend: Any) -> Any:
-    """Strip EngagementFilesystemBackend wrapping from a backend.
-
-    EngagementFilesystemBackend._real() maps /workspace paths to
-    /workspace/<slug>/..., which mangles /skills/ paths to
-    /workspace/<slug>/skills/... — a path that does not exist in the
-    sandbox container. Skill reads must bypass this wrapper and go
-    directly to the raw DockerSandbox which can reach /skills/ via
-    docker cp / execute().
-    """
-    # Import here to avoid circular import (filesystem.py imports from skills.py
-    # indirectly via middleware/__init__.py)
-    from decepticon.middleware.filesystem import EngagementFilesystemBackend  # noqa: PLC0415
-
-    while isinstance(backend, EngagementFilesystemBackend):
-        backend = backend._backend
-    return backend
-
-
 # ── load_skill tool ──────────────────────────────────────────────────────────
 # A Decepticon-specific replacement for `load_skill("/skills/...")` that
 # returns the full skill body without the deepagents 100-line limit, plus a
@@ -117,11 +97,11 @@ def build_load_skill_tool(backend: Any, sources: list[str]):  # type: ignore[no-
     langgraph container's local fs). Path is restricted to ``/skills/*`` to
     keep this tool's intent distinct from the general ``read_file``.
 
-    Strips any EngagementFilesystemBackend wrapping — /skills/ paths must
-    reach the raw sandbox directly; the engagement wrapper mangles them to
-    /workspace/<slug>/skills/... which does not exist in the container.
+    Backend routing for ``/skills/`` is handled by ``CompositeBackend``
+    (see ``decepticon/backends/__init__.py:make_agent_backend``), which
+    sends these paths to a local ``FilesystemBackend`` inside the
+    langgraph container. No manual unwrapping needed.
     """
-    backend = _unwrap_backend(backend)
 
     @tool
     def load_skill(skill_path: str, include_siblings: bool = False) -> str:
@@ -135,7 +115,7 @@ def build_load_skill_tool(backend: Any, sources: list[str]):  # type: ignore[no-
 
         Args:
             skill_path: Absolute path under ``/skills/``, e.g.
-                ``/skills/exploit/web/crypto.md``.
+                ``/skills/standard/exploit/web/crypto.md``.
             include_siblings: If True, also list sibling ``.md`` files in the
                 same directory (useful when the skill is a category index).
                 Default False to avoid duplicating the catalog already in the
