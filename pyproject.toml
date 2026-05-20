@@ -79,6 +79,23 @@ dev = [
 [project.scripts]
 decepticon-kg-health = "decepticon.tools.research.health:main"
 
+# Plugin entry-point groups consumed by ``decepticon.plugin_loader``.
+# External packages (e.g. SaaS plugin packages) declare their contributions
+# under these groups; OSS itself currently ships no entries. See
+# ``decepticon/plugin_loader.py`` for the contract.
+#
+#   [project.entry-points."decepticon.tools"]
+#   my-tools = "my_pkg.tools:get_tools"
+#
+#   [project.entry-points."decepticon.middleware"]
+#   my-mw = "my_pkg.middleware:get_middleware"
+#
+#   [project.entry-points."decepticon.agents"]
+#   my-agent = "my_pkg.agents.my_agent"
+#
+#   [project.entry-points."decepticon.callbacks"]
+#   my-cb = "my_pkg.callbacks:get_callbacks"
+
 [project.urls]
 Homepage = "https://github.com/PurpleAILAB/Decepticon"
 Repository = "https://github.com/PurpleAILAB/Decepticon"

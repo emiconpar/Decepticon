@@ -28,6 +28,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
+from decepticon.plugin_loader import load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
@@ -90,6 +91,9 @@ def create_analyst_agent():
     # references tools offer payloads + external knowledge lookup;
     # bounty tools provide scope checking and report formatting.
     tools = [*RESEARCH_TOOLS, *BOUNTY_TOOLS, *REFERENCES_TOOLS, *BASH_TOOLS]
+
+    tools.extend(load_plugin_tools(role="analyst"))
+    middleware.extend(load_plugin_middleware(role="analyst", backend=backend))
 
     agent = create_agent(
         llm,

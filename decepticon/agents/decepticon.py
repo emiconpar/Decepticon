@@ -50,6 +50,7 @@ from decepticon.backends import build_sandbox_backend
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
+from decepticon.plugin_loader import load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
@@ -227,10 +228,13 @@ def create_decepticon_agent():
         ]
     )
 
+    tools = list(load_plugin_tools(role="decepticon"))
+    middleware.extend(load_plugin_middleware(role="decepticon", backend=backend))
+
     agent = create_agent(
         llm,
         system_prompt=system_prompt,
-        tools=[],
+        tools=tools,
         middleware=middleware,
         name="decepticon",
     )

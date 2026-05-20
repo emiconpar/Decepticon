@@ -35,6 +35,7 @@ from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
+from decepticon.plugin_loader import load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import FilesystemMiddleware, OPPLANMiddleware
 from decepticon.middleware.skills import SkillsMiddleware
 from decepticon.tools.research.tools import kg_query, kg_stats
@@ -147,10 +148,14 @@ def create_vulnresearch_agent():
     )
 
     # Tiny tool surface: only read the graph. All work is delegated.
+    tools = [kg_query, kg_stats]
+    tools.extend(load_plugin_tools(role="vulnresearch"))
+    middleware.extend(load_plugin_middleware(role="vulnresearch", backend=backend))
+
     agent = create_agent(
         llm,
         system_prompt=system_prompt,
-        tools=[kg_query, kg_stats],
+        tools=tools,
         middleware=middleware,
         name="vulnresearch",
     )

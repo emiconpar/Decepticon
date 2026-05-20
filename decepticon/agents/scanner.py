@@ -25,6 +25,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
+from decepticon.plugin_loader import load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
@@ -87,6 +88,9 @@ def create_scanner_agent():
     # Tight tool surface: sharded scanner helpers + minimal KG read access +
     # bash for directory sizing only. NO vuln analysis tools.
     tools = [*SCANNER_TOOLS, kg_query, kg_stats, *BASH_TOOLS]
+
+    tools.extend(load_plugin_tools(role="scanner"))
+    middleware.extend(load_plugin_middleware(role="scanner", backend=backend))
 
     agent = create_agent(
         llm,

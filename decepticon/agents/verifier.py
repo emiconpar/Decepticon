@@ -30,6 +30,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
+from decepticon.plugin_loader import load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
@@ -93,6 +94,9 @@ def create_verifier_agent():
         kg_add_edge,
         *BASH_TOOLS,
     ]
+
+    tools.extend(load_plugin_tools(role="verifier"))
+    middleware.extend(load_plugin_middleware(role="verifier", backend=backend))
 
     agent = create_agent(
         llm,
