@@ -24,7 +24,7 @@ do NOT ask the operator for it.
 All other CRITICAL_RULES remain active. Recon→exploit ordering, OPPLAN
 discipline, no-bash-in-orchestrator, tag routing, OPSEC, and budget
 pacing live in their owning prompts/skills (see `decepticon.md` Rules
-20/22, the recon/exploit agent prompts, and `/skills/exploit/web/SKILL.md`
+20/22, the recon/exploit agent prompts, and `/skills/standard/exploit/web/SKILL.md`
 for vuln routing).
 
 ## SHORT-CIRCUIT — flag/credential found
@@ -41,7 +41,7 @@ flag-equivalent credential:
 
 ## Flag-path sweep (after RCE confirmed)
 
-Generic skills under `/skills/exploit/web/` (`command-injection.md`, `cve.md`, etc.) cover credential/secret extraction but intentionally exclude CTF flag conventions. Once any RCE primitive is confirmed (`id`, `hostname`, or arbitrary file read), run this single batched sweep — do NOT issue one curl per path:
+Generic skills under `/skills/standard/exploit/web/` (`command-injection.md`, `cve.md`, etc.) cover credential/secret extraction but intentionally exclude CTF flag conventions. Once any RCE primitive is confirmed (`id`, `hostname`, or arbitrary file read), run this single batched sweep — do NOT issue one curl per path:
 
 ```bash
 # CTF flag-path conventions — XBOW / picoCTF / HackTheBox / TryHackMe overlap.
@@ -65,7 +65,7 @@ Replace `<RCE_SINK>` with the confirmed injection endpoint. If the flag's `forma
 grep -hoE '(FLAG|flag|CTF)\{[^}]+\}' /tmp/flag_sweep.txt /tmp/find_flag.txt | sort -u
 ```
 
-The generic credential harvest (`/etc/passwd`, `.env`, configs, SSH keys, secret/cred/token files) lives in `/skills/exploit/web/command-injection.md` — run BOTH sweeps post-RCE; flag-path first (objective), credential second (lateral).
+The generic credential harvest (`/etc/passwd`, `.env`, configs, SSH keys, secret/cred/token files) lives in `/skills/standard/exploit/web/command-injection.md` — run BOTH sweeps post-RCE; flag-path first (objective), credential second (lateral).
 
 ## Tag → Skill Routing Table (BENCHMARK FAST-PATH)
 
@@ -75,14 +75,14 @@ discover the class through the domain router skill applied to recon's raw observ
 This table is the canonical fast-path for the benchmark shortcut and the **only** place
 this mapping lives. Generic agent prompts (`recon.md`, `exploit.md`, `decepticon.md`)
 intentionally do not encode it — they route via the domain router skills
-(`/skills/exploit/<domain>/SKILL.md`) on observation evidence.
+(`/skills/standard/exploit/<domain>/SKILL.md`) on observation evidence.
 
 **Consumer**: the orchestrator (`decepticon.md`). When dispatching exploit, the orchestrator
 may consult this table to pick the matching sub-skill directly from the pre-declared tags,
 skipping the observation-based router classification. **Recon does NOT consume this table**
 — recon's role is observation, not classification or skill recommendation.
 
-| `Vulnerability tag` | `/skills/exploit/web/<X>.md` |
+| `Vulnerability tag` | `/skills/standard/exploit/web/<X>.md` |
 |---|---|
 | `sqli`                       | `sqli.md` |
 | `blind_sqli`                 | `blind-sqli.md` (load with `sqli.md` when sqlmap+tamper is exhausted) |
@@ -110,8 +110,8 @@ For multiple tags → emit one `REQUIRED SKILL LOAD:` line per mapped skill.
 
 ## What this skill is NOT
 
-- vulnerability routing → `/skills/exploit/{web,ad}/SKILL.md`
-- recon playbooks → `/skills/recon/<area>/SKILL.md`
+- vulnerability routing → `/skills/standard/exploit/{web,ad}/SKILL.md`
+- recon playbooks → `/skills/standard/recon/<area>/SKILL.md`
 - OPSEC → `/skills/shared/opsec/SKILL.md`
 - per-challenge context → middleware-injected, every turn
 - agent-specific behavior → that agent's prompt and `/skills/<agent>/`

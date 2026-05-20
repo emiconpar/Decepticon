@@ -15,7 +15,7 @@
 
 I'll start by loading the benchmark skill to understand the engagement protocol.
 
-Benchmark mode is engaged. Tags: `path_traversal` → routes to `/skills/exploit/web/lfi.md`. Let me check the workspace state and set up OPPLAN.
+Benchmark mode is engaged. Tags: `path_traversal` → routes to `/skills/standard/exploit/web/lfi.md`. Let me check the workspace state and set up OPPLAN.
 
 Fresh workspace. Building OPPLAN for path_traversal benchmark.
 

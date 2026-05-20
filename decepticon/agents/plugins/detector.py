@@ -51,9 +51,9 @@ def create_detector_agent():
     Notes:
       - The Detector reads source files via FilesystemMiddleware exclusively;
         no DockerSandbox bash access.
-      - Skills are sourced from ``/skills/analyst/*`` (shared with legacy
+      - Skills are sourced from ``/skills/standard/analyst/*`` (shared with legacy
         analyst — each vuln class has its own playbook) plus a small
-        detector-specific operating guide under ``/skills/detector/``.
+        detector-specific operating guide under ``/skills/plugins/detector/``.
       - ``recursion_limit=120`` — source review per candidate burns turns,
         but much less than full analyst iteration loops.
     """
@@ -75,7 +75,7 @@ def create_detector_agent():
     middleware = [
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/detector/", "/skills/analyst/", "/skills/shared/"],
+            sources=["/skills/plugins/detector/", "/skills/standard/analyst/", "/skills/shared/"],
         ),
         FilesystemMiddleware(backend=backend),
     ]

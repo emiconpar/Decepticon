@@ -8,12 +8,12 @@ description: Active Directory attack lane — BloodHound ingestion, Kerberoastin
 ## Playbooks
 | Skill | Use for |
 |---|---|
-| `/skills/ad/bloodhound-query/SKILL.md` | Ingest + common Cypher queries |
-| `/skills/ad/kerberoasting/SKILL.md`    | Roast SPN users, crack with hashcat |
-| `/skills/ad/asrep-roasting/SKILL.md`   | dontreqpreauth users |
-| `/skills/ad/adcs-esc1/SKILL.md`        | ESC1 template abuse → domain admin |
-| `/skills/ad/dcsync/SKILL.md`           | Replication rights → krbtgt dump |
-| `/skills/ad/laps/SKILL.md`             | LAPS local admin password extraction |
+| `/skills/standard/ad/bloodhound-query/SKILL.md` | Ingest + common Cypher queries |
+| `/skills/standard/ad/kerberoasting/SKILL.md`    | Roast SPN users, crack with hashcat |
+| `/skills/standard/ad/asrep-roasting/SKILL.md`   | dontreqpreauth users |
+| `/skills/standard/ad/adcs-esc1/SKILL.md`        | ESC1 template abuse → domain admin |
+| `/skills/standard/ad/dcsync/SKILL.md`           | Replication rights → krbtgt dump |
+| `/skills/standard/ad/laps/SKILL.md`             | LAPS local admin password extraction |
 
 ## Workflow
 1. Collect: `bash("bloodhound-python -u user -p pass -d DOMAIN -c all --zip")`

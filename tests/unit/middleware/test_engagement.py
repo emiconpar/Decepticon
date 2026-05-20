@@ -213,7 +213,7 @@ def test_benchmark_mode_injects_per_challenge_context_only(
     assert "Rule 8 (Startup Required)" not in text
     assert "Rule 9 (Final Report)" not in text
     assert "RECON objective" not in text
-    assert "/skills/exploit/web/" not in text
+    assert "/skills/standard/exploit/web/" not in text
     assert "/skills/benchmark/SKILL.md" not in text
     # Per-challenge context IS injected.
     assert "## CTF Benchmark Challenge" in text
@@ -253,7 +253,7 @@ def test_benchmark_mode_full_context(
     assert "**Mission brief:** Login Form SQLi — bypass authentication" in text
     # benchmark playbook must NOT be in middleware output
     assert "[BENCHMARK MODE — engaged]" not in text
-    assert "/skills/exploit/web/" not in text
+    assert "/skills/standard/exploit/web/" not in text
     # engagement section comes before benchmark per-challenge section
     assert text.index("Workspace slug:") < text.index("## CTF Benchmark Challenge")
 

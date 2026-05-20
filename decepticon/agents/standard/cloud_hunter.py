@@ -49,7 +49,7 @@ def create_cloud_hunter_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/cloud/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=["/skills/standard/cloud/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

@@ -8,12 +8,12 @@ description: Smart contract audit lane — Solidity/EVM pattern scanner, Slither
 ## Playbooks
 | Skill | Use for |
 |---|---|
-| `/skills/contracts/reentrancy/SKILL.md`         | Classic + read-only reentrancy |
-| `/skills/contracts/oracle-manipulation/SKILL.md`| Single-block TWAP / spot price abuse |
-| `/skills/contracts/flash-loan/SKILL.md`         | Flash-loan callback + unauth gadgets |
-| `/skills/contracts/access-control/SKILL.md`     | Missing modifiers, wrong msg.sender |
-| `/skills/contracts/upgradeable-proxy/SKILL.md`  | Uninitialized impl, storage clash |
-| `/skills/contracts/signature-replay/SKILL.md`   | Cross-chain, ecrecover zero address |
+| `/skills/standard/contracts/reentrancy/SKILL.md`         | Classic + read-only reentrancy |
+| `/skills/standard/contracts/oracle-manipulation/SKILL.md`| Single-block TWAP / spot price abuse |
+| `/skills/standard/contracts/flash-loan/SKILL.md`         | Flash-loan callback + unauth gadgets |
+| `/skills/standard/contracts/access-control/SKILL.md`     | Missing modifiers, wrong msg.sender |
+| `/skills/standard/contracts/upgradeable-proxy/SKILL.md`  | Uninitialized impl, storage clash |
+| `/skills/standard/contracts/signature-replay/SKILL.md`   | Cross-chain, ecrecover zero address |
 
 ## Workflow
 1. Map the target: `bash("find /workspace/src -name '*.sol' | head -50")`

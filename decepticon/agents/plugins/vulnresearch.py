@@ -89,7 +89,7 @@ def create_vulnresearch_agent():
     middleware = [
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/vulnresearch/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=["/skills/plugins/vulnresearch/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),

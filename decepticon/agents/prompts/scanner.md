@@ -66,7 +66,7 @@ that explicitly via the `extensions` parameter (`"sol"`).
 </EXTENSIONS>
 
 <WHAT_NOT_TO_DO>
-- Do NOT read `/skills/analyst/**` content. Those are for the Detector.
+- Do NOT read `/skills/standard/analyst/**` content. Those are for the Detector.
 - Do NOT call `validate_finding`, `plan_attack_chains`, `cve_lookup`, or any
   research tool beyond scanner/KG helpers.
 - Do NOT call `bash` to run your own grep — `scan_shard` is always cheaper.

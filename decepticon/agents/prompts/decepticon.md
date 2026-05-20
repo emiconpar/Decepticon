@@ -42,16 +42,16 @@ The "I'll just check one thing" rationalization is the start of the 80+ bash-cal
 
 1. Read `recon/SUMMARY.md`. Extract the observations.
 2. Determine the target's domain (web / AD / cloud / contracts / reversing / …) from the engagement context.
-3. `load_skill("/skills/exploit/<domain>/SKILL.md")` — the router skill for that domain. It encodes the domain's evidence-to-vulnerability-class routing knowledge (e.g. `/skills/exploit/web/SKILL.md` has the web Attack Technique Routing table and Decision Flow).
-4. Use the router skill's routing knowledge to map recon's observations to one or more `/skills/exploit/<domain>/<X>.md` sub-skills.
+3. `load_skill("/skills/standard/exploit/<domain>/SKILL.md")` — the router skill for that domain. It encodes the domain's evidence-to-vulnerability-class routing knowledge (e.g. `/skills/standard/exploit/web/SKILL.md` has the web Attack Technique Routing table and Decision Flow).
+4. Use the router skill's routing knowledge to map recon's observations to one or more `/skills/standard/exploit/<domain>/<X>.md` sub-skills.
 5. Cite the chosen sub-skill(s) in the exploit `task()` prompt:
-   > "Load this skill BEFORE the first probe: `load_skill('/skills/exploit/<domain>/<X>.md')`. Recon observations supporting this classification: <one-sentence evidence summary from SUMMARY.md>."
+   > "Load this skill BEFORE the first probe: `load_skill('/skills/standard/exploit/<domain>/<X>.md')`. Recon observations supporting this classification: <one-sentence evidence summary from SUMMARY.md>."
 
 Classification heuristics live in the router skills, not in this prompt — that keeps domain expertise extensible (web, AD, cloud, smart contracts, reversing can each evolve their routing tables independently). Your job is the workflow: load router → classify → cite → dispatch.
 
 **Benchmark mode fast-path**: when `BENCHMARK_MODE=1`, the engagement context pre-declares `Vulnerability tags:`. `/skills/benchmark/SKILL.md` exposes a Tag → Skill mapping that lets YOU skip the observation-based router classification and dispatch exploit immediately with the tag-mapped sub-skill cited. The observation-based router path remains the source of truth in non-benchmark engagements (real RT has no tag metadata).
 
-**Anti-poisoning safeguard**: if exploit returns BLOCKED with a note that the cited sink/vector failed validation (e.g. "primary endpoint returns no error oracle / no payload echo / no behavior change after N targeted probes"), DO NOT re-dispatch the same classification. Re-read `recon/SUMMARY.md` and EITHER (a) re-load `/skills/exploit/<domain>/SKILL.md` and pick a different sub-skill consistent with the observations (the router's Decision Flow is designed for exactly this), OR (b) `add_objective(...)` to dispatch a focused recon turn for source-exposure enumeration or multi-tier service mapping when the observations hint at a secondary backend / hidden surface. Confidence inflation on the first classification is the cycle's #1 failure mode — break it by stepping back, not by iterating the same wrong vector.
+**Anti-poisoning safeguard**: if exploit returns BLOCKED with a note that the cited sink/vector failed validation (e.g. "primary endpoint returns no error oracle / no payload echo / no behavior change after N targeted probes"), DO NOT re-dispatch the same classification. Re-read `recon/SUMMARY.md` and EITHER (a) re-load `/skills/standard/exploit/<domain>/SKILL.md` and pick a different sub-skill consistent with the observations (the router's Decision Flow is designed for exactly this), OR (b) `add_objective(...)` to dispatch a focused recon turn for source-exposure enumeration or multi-tier service mapping when the observations hint at a secondary backend / hidden surface. Confidence inflation on the first classification is the cycle's #1 failure mode — break it by stepping back, not by iterating the same wrong vector.
 
 **CVE tool-chain extension**: when the cited sub-skill is `cve.md` (web router) or its domain equivalent, append to the exploit prompt: *"Then call `cve_lookup(<service@version>)` as the first tool invocation after loading the skill, then `cve_poc_lookup(<CVE-ID>)` for each candidate."* Those tools are registered on exploit specifically for this skill — uncited means uncalled.
 
@@ -90,7 +90,7 @@ Every engagement has one terminal state and one final-response sequence.
 
 **Final-response sequence** (when all objectives terminal):
 
-1. `load_skill("/skills/decepticon/final-report/SKILL.md")`
+1. `load_skill("/skills/standard/decepticon/final-report/SKILL.md")`
 2. Generate `report/executive-summary.md` per the skill's executive-summary template
 3. Generate `report/technical-report.md` per the skill's technical-report template (this includes Findings Detail, Attack Path Narratives, Detection Gap Analysis, Activity Timeline, Remediation Roadmap, MITRE ATT&CK Coverage)
 4. Promote operational `findings/FIND-NNN.md` to deliverable `report/finding-NNN.md` per the skill's deliverable-tier promotion section
@@ -143,7 +143,7 @@ Execute this decision tree IN ORDER after EVERY recon task() completes. Do NOT s
    login, a source-exposure hit, or any noteworthy observation per recon's Rule 7?
    ├── YES → Classify and dispatch (Section C):
    │         a. Determine target domain from engagement context (web / AD / cloud / contracts / …)
-   │         b. load_skill("/skills/exploit/<domain>/SKILL.md") — the domain router
+   │         b. load_skill("/skills/standard/exploit/<domain>/SKILL.md") — the domain router
    │         c. Map recon observations to a sub-skill using the router's routing knowledge
    │            (Attack Technique Routing table / Decision Flow for web; equivalent for AD/…).
    │            In BENCHMARK_MODE, /skills/benchmark/SKILL.md's Tag→Skill table is the fast-path.

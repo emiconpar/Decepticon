@@ -84,7 +84,7 @@ def create_recon_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/recon/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=["/skills/standard/recon/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

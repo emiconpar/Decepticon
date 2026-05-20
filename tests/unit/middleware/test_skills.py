@@ -107,7 +107,7 @@ class _FakeRequest:
 
 def _make_middleware(backend: Any) -> SkillsMiddleware:
     """Build a SkillsMiddleware against a stub backend with one source."""
-    return SkillsMiddleware(backend=backend, sources=["/skills/recon/"])
+    return SkillsMiddleware(backend=backend, sources=["/skills/standard/recon/"])
 
 
 # ── MED #7 — isinstance gate on backend result ─────────────────────────
@@ -124,7 +124,7 @@ class TestWorkflowLoaderRejectsNonDictFileData:
         backend = _StringFileDataBackend(file_data="raw text not a dict")
         mw = _make_middleware(backend)
 
-        result = mw._read_workflow_for_source(backend, "/skills/recon/")
+        result = mw._read_workflow_for_source(backend, "/skills/standard/recon/")
 
         assert result is None, (
             "non-dict file_data must short-circuit to None — see issue #157 MED #7"
@@ -134,20 +134,20 @@ class TestWorkflowLoaderRejectsNonDictFileData:
         backend = _StringFileDataBackend(file_data=["line1", "line2"])
         mw = _make_middleware(backend)
 
-        assert mw._read_workflow_for_source(backend, "/skills/recon/") is None
+        assert mw._read_workflow_for_source(backend, "/skills/standard/recon/") is None
 
     def test_none_file_data_returns_none(self) -> None:
         backend = _StringFileDataBackend(file_data=None)
         mw = _make_middleware(backend)
 
-        assert mw._read_workflow_for_source(backend, "/skills/recon/") is None
+        assert mw._read_workflow_for_source(backend, "/skills/standard/recon/") is None
 
     def test_dict_with_content_returns_string(self) -> None:
         """Happy-path positive control: a properly-shaped dict still works."""
         backend = _DictFileDataBackend(content="# Recon Workflow\nDo this then that.")
         mw = _make_middleware(backend)
 
-        result = mw._read_workflow_for_source(backend, "/skills/recon/")
+        result = mw._read_workflow_for_source(backend, "/skills/standard/recon/")
         assert result == "# Recon Workflow\nDo this then that."
 
     def test_backend_read_exception_returns_none(self) -> None:
@@ -155,7 +155,7 @@ class TestWorkflowLoaderRejectsNonDictFileData:
         backend = _RaisingBackend()
         mw = _make_middleware(backend)
 
-        assert mw._read_workflow_for_source(backend, "/skills/recon/") is None
+        assert mw._read_workflow_for_source(backend, "/skills/standard/recon/") is None
 
     # ── async siblings ──────────────────────────────────────────────────
 
@@ -163,21 +163,21 @@ class TestWorkflowLoaderRejectsNonDictFileData:
         backend = _StringFileDataBackend(file_data="raw text not a dict")
         mw = _make_middleware(backend)
 
-        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/recon/"))
+        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/standard/recon/"))
         assert result is None
 
     def test_async_dict_with_content_returns_string(self) -> None:
         backend = _DictFileDataBackend(content="# Recon Workflow")
         mw = _make_middleware(backend)
 
-        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/recon/"))
+        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/standard/recon/"))
         assert result == "# Recon Workflow"
 
     def test_async_backend_read_exception_returns_none(self) -> None:
         backend = _RaisingBackend()
         mw = _make_middleware(backend)
 
-        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/recon/"))
+        result = asyncio.run(mw._aread_workflow_for_source(backend, "/skills/standard/recon/"))
         assert result is None
 
     def test_empty_string_content_returns_none(self) -> None:
@@ -190,7 +190,7 @@ class TestWorkflowLoaderRejectsNonDictFileData:
         backend = _DictFileDataBackend(content="   ")
         mw = _make_middleware(backend)
 
-        assert mw._read_workflow_for_source(backend, "/skills/recon/") is None
+        assert mw._read_workflow_for_source(backend, "/skills/standard/recon/") is None
 
 
 # ── MED #8 — template format failures are swallowed ────────────────────

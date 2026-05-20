@@ -56,7 +56,7 @@ def create_contract_auditor_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/contracts/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=["/skills/standard/contracts/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

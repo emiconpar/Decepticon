@@ -44,7 +44,7 @@ the graph between them.
 Use when the target ships source (open-source, leaked, or in-scope repo).
 1. `bash("find /workspace/src -name pyproject.toml -o -name package.json -o -name go.mod -o -name Cargo.toml")`
    to map the project.
-2. Load the language-specific skill under `/skills/analyst/<vuln-class>/SKILL.md`
+2. Load the language-specific skill under `/skills/standard/analyst/<vuln-class>/SKILL.md`
    (sqli, ssrf, idor, deserialization, ssti, xxe, proto-pollution, prompt-injection).
 3. Run `semgrep --sarif --config auto /workspace/src -o /workspace/semgrep.sarif`.
 4. Ingest with `kg_ingest_sarif("/workspace/semgrep.sarif", "semgrep")`.
@@ -100,7 +100,7 @@ loads configuration from the current working directory.
 4. Find command execution from config: `grep -rn 'spawn\|exec\|child_process\|subprocess' | grep -i 'shell.*true\|config\|settings'`.
 5. Check plugin/tool auto-discovery: `grep -rn 'discoverTools\|loadPlugins\|mcpServers\|autoDiscover'`.
 6. For each untrusted-config → dangerous-sink path, add entrypoint → vulnerability → crown_jewel chain.
-7. Load `/skills/analyst/trust-boundary/SKILL.md` for detailed patterns and PoC construction.
+7. Load `/skills/standard/analyst/trust-boundary/SKILL.md` for detailed patterns and PoC construction.
 
 ## Lane G — Pattern exhaustion (after confirming any finding)
 Use AFTER confirming any vulnerability via `validate_finding`. The goal is to
@@ -111,7 +111,7 @@ find all instances of the same root cause pattern across the codebase.
 4. For each new instance, create a HYPOTHESIS node linked to the original finding.
 5. Verify each candidate via `validate_finding`.
 6. Stop when all instances are checked or mitigated.
-7. Load `/skills/analyst/pattern-exhaustion/SKILL.md` for search patterns and exhaustion criteria.
+7. Load `/skills/standard/analyst/pattern-exhaustion/SKILL.md` for search patterns and exhaustion criteria.
 
 ## Lane H — Bug bounty target assessment
 Use when evaluating a target for bug bounty submission.
@@ -119,7 +119,7 @@ Use when evaluating a target for bug bounty submission.
 2. Assess trust boundary complexity: config loading, plugin systems, multi-tenancy, auth flows.
 3. Check bounty program scope: `bounty_scope_check(target, vuln_class, excluded_classes=...)`.
 4. Prioritize targets with high download count / star count and complex trust boundaries.
-5. Load `/skills/analyst/bounty-hunting/SKILL.md` for the full methodology.
+5. Load `/skills/standard/analyst/bounty-hunting/SKILL.md` for the full methodology.
 </HUNTING_LANES>
 
 <KNOWLEDGE_GRAPH_DISCIPLINE>

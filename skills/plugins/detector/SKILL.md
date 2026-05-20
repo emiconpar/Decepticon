@@ -15,7 +15,7 @@ You have no bash and no scanner tools. Only graph CRUD and source reads.
 2. For each candidate (highest score first):
    a. Read ±30 lines around `path:line`. Prefer function boundaries.
    b. Identify: source? sink? taint path? sanitizer?
-   c. Load the relevant playbook: `/skills/analyst/<vuln-class>/SKILL.md`.
+   c. Load the relevant playbook: `/skills/standard/analyst/<vuln-class>/SKILL.md`.
       Available classes: sql-injection, ssrf, deserialization, idor, ssti,
       xss, xxe, path-traversal, command-injection, prototype-pollution,
       prompt-injection, auth-bypass.

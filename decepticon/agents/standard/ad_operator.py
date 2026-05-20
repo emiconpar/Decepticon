@@ -50,7 +50,7 @@ def create_ad_operator_agent():
     middleware = [
         EngagementContextMiddleware(),
         SkillsMiddleware(
-            backend=backend, sources=["/skills/ad/", "/skills/shared/", *benchmark_skill_sources()]
+            backend=backend, sources=["/skills/standard/ad/", "/skills/shared/", *benchmark_skill_sources()]
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

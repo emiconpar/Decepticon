@@ -135,7 +135,7 @@ def build_load_skill_tool(backend: Any, sources: list[str]):  # type: ignore[no-
 
         Args:
             skill_path: Absolute path under ``/skills/``, e.g.
-                ``/skills/exploit/web/crypto.md``.
+                ``/skills/standard/exploit/web/crypto.md``.
             include_siblings: If True, also list sibling ``.md`` files in the
                 same directory (useful when the skill is a category index).
                 Default False to avoid duplicating the catalog already in the

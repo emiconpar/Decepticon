@@ -66,7 +66,7 @@ def create_soundwave_agent():
     # Assemble middleware stack
     middleware = [
         EngagementContextMiddleware(),
-        SkillsMiddleware(backend=backend, sources=["/skills/soundwave/"]),
+        SkillsMiddleware(backend=backend, sources=["/skills/standard/soundwave/"]),
         FilesystemMiddleware(backend=backend),
     ]
     if fallback_models:

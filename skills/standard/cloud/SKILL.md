@@ -8,11 +8,11 @@ description: Cloud exploitation lane — AWS IAM privesc, S3 takeover, k8s RBAC 
 ## Playbooks
 | Skill | Use for |
 |---|---|
-| `/skills/cloud/aws-iam-enum/SKILL.md`      | IAM enumeration + privesc |
-| `/skills/cloud/s3-takeover/SKILL.md`       | Dangling bucket / subdomain takeover |
-| `/skills/cloud/k8s-pivot/SKILL.md`         | Pod escape, RBAC abuse, hostPath |
-| `/skills/cloud/terraform-state-leak/SKILL.md` | Exposed state file exploitation |
-| `/skills/cloud/imds-pivot/SKILL.md`        | SSRF → metadata → IAM role |
+| `/skills/standard/cloud/aws-iam-enum/SKILL.md`      | IAM enumeration + privesc |
+| `/skills/standard/cloud/s3-takeover/SKILL.md`       | Dangling bucket / subdomain takeover |
+| `/skills/standard/cloud/k8s-pivot/SKILL.md`         | Pod escape, RBAC abuse, hostPath |
+| `/skills/standard/cloud/terraform-state-leak/SKILL.md` | Exposed state file exploitation |
+| `/skills/standard/cloud/imds-pivot/SKILL.md`        | SSRF → metadata → IAM role |
 
 ## Workflow (authenticated engagement)
 1. `bash("aws sts get-caller-identity")`

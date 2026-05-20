@@ -63,7 +63,7 @@ def create_patcher_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/patcher/", "/skills/shared/"],
+            sources=["/skills/plugins/patcher/", "/skills/shared/"],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

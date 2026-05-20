@@ -51,7 +51,7 @@ def create_analyst_agent():
         source-review workloads.
       - Research tools come *before* bash in the tool list so the LLM
         defaults to graph-updating operations over raw shell commands.
-      - Skills routed through /skills/analyst/ + /skills/shared/.
+      - Skills routed through /skills/standard/analyst/ + /skills/shared/.
     """
     config = load_config()
 
@@ -72,7 +72,7 @@ def create_analyst_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/analyst/", "/skills/shared/"],
+            sources=["/skills/standard/analyst/", "/skills/shared/"],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

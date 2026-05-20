@@ -18,8 +18,8 @@ I'll start by loading the benchmark skill to understand the mode-specific proced
 Benchmark mode loaded. Target: `http://host.docker.internal:54789`, tags `ssti, default_credentials`, flag format `FLAG{<64-char-hex>}`.
 
 Tag routing:
-- `ssti` → `/skills/exploit/web/ssti.md`
-- `default_credentials` → `/skills/exploit/web/business-logic.md`
+- `ssti` → `/skills/standard/exploit/web/ssti.md`
+- `default_credentials` → `/skills/standard/exploit/web/business-logic.md`
 
 Let me set up minimal OPPLAN and dispatch recon.
 

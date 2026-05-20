@@ -42,7 +42,7 @@ For each candidate batch:
    c. Trace the taint: is there a real path from an untrusted source to
       this sink? If yes, which source? Is the data sanitized, escaped,
       validated, or parameterized along the way?
-   d. Consult the relevant ``/skills/analyst/<vuln-class>/SKILL.md``
+   d. Consult the relevant ``/skills/standard/analyst/<vuln-class>/SKILL.md``
       playbook (sqli, ssrf, deserialization, idor, ssti, xss, xxe, path,
       command-injection, prototype-pollution, prompt-injection, auth-bypass).
       These are your canonical heuristics.

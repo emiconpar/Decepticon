@@ -49,7 +49,7 @@ def create_scanner_agent():
       - Tools: sharded scanner helpers + ``kg_query`` + ``kg_stats``, plus
         ``bash`` for directory sizing (``du``, ``wc -l``, ``ls``). No other
         research tools.
-      - Skills routed through ``/skills/scanner/`` + ``/skills/shared/``.
+      - Skills routed through ``/skills/plugins/scanner/`` + ``/skills/shared/``.
     """
     config = load_config()
 
@@ -70,7 +70,7 @@ def create_scanner_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/scanner/", "/skills/shared/"],
+            sources=["/skills/plugins/scanner/", "/skills/shared/"],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),

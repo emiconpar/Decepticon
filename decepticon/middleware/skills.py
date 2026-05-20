@@ -30,7 +30,7 @@ Usage:
 
     middleware = SkillsMiddleware(
         backend=backend,
-        sources=["/skills/recon/", "/skills/shared/"],
+        sources=["/skills/standard/recon/", "/skills/shared/"],
     )
 """
 
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 # ── Decepticon skill system prompt template ──────────────────────────────────
 # Replaces both the old shared skill prompt fragment and the base middleware's
 # generic SKILLS_SYSTEM_PROMPT. Placeholders:
-#   {skills_locations} — `**Decepticon Skills**: /skills/recon/` style headers
+#   {skills_locations} — `**Decepticon Skills**: /skills/standard/recon/` style headers
 #   {workflow}         — full body of <source>/workflow.md files (auto-loaded)
 #   {skills_list}      — catalog of sub-skills grouped by subdomain
 
@@ -143,7 +143,7 @@ class SkillsMiddleware(BaseSkillsMiddleware):
 
     Args:
         backend: Backend instance for file operations.
-        sources: List of skill source paths (e.g., ``['/skills/recon/', '/skills/shared/']``).
+        sources: List of skill source paths (e.g., ``['/skills/standard/recon/', '/skills/shared/']``).
     """
 
     def __init__(self, *, backend: Any, sources: list[str]) -> None:

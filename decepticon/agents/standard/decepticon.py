@@ -134,7 +134,7 @@ def create_decepticon_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/decepticon/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=["/skills/standard/decepticon/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),

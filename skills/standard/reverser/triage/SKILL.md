@@ -44,4 +44,4 @@ candidate CVE IDs from `cve_by_package` if it's a known library.
 
 ## 6. Handoff
 If NX/PIE are both off AND there are dangerous C imports → this is a
-prime exploit-dev target; load `/skills/reverser/rop-chain/SKILL.md`.
+prime exploit-dev target; load `/skills/standard/reverser/rop-chain/SKILL.md`.

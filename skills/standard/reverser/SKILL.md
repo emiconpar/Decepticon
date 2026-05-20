@@ -8,11 +8,11 @@ description: Root pointer for the binary reversing lane. Covers triage, string e
 ## Playbooks
 | Skill | Use for |
 |---|---|
-| `/skills/reverser/triage/SKILL.md`            | First-pass ELF/PE/Mach-O triage |
-| `/skills/reverser/firmware/SKILL.md`          | Router / IoT firmware extraction |
-| `/skills/reverser/packer-unpacking/SKILL.md`  | UPX / ASPack / Themida / VMProtect |
-| `/skills/reverser/rop-chain/SKILL.md`         | Gadget hunting for exploit dev |
-| `/skills/reverser/anti-debug-bypass/SKILL.md` | IsDebuggerPresent, ptrace, NtGlobalFlag |
+| `/skills/standard/reverser/triage/SKILL.md`            | First-pass ELF/PE/Mach-O triage |
+| `/skills/standard/reverser/firmware/SKILL.md`          | Router / IoT firmware extraction |
+| `/skills/standard/reverser/packer-unpacking/SKILL.md`  | UPX / ASPack / Themida / VMProtect |
+| `/skills/standard/reverser/rop-chain/SKILL.md`         | Gadget hunting for exploit dev |
+| `/skills/standard/reverser/anti-debug-bypass/SKILL.md` | IsDebuggerPresent, ptrace, NtGlobalFlag |
 
 ## Workflow
 1. `bin_identify` — format, arch, NX/PIE

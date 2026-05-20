@@ -70,7 +70,7 @@ def create_verifier_agent():
         EngagementContextMiddleware(),
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/verifier/", "/skills/analyst/", "/skills/shared/"],
+            sources=["/skills/plugins/verifier/", "/skills/standard/analyst/", "/skills/shared/"],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),
