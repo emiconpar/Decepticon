@@ -36,6 +36,7 @@ from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
 from decepticon.plugin_loader import (
+    is_bundle_enabled,
     load_plugin_middleware,
     load_plugin_tools,
     load_subagents_for_parent,
@@ -123,5 +124,14 @@ def create_vulnresearch_agent():
     return agent.with_config({"recursion_limit": 250})
 
 
-# Module-level graph for LangGraph Platform (langgraph serve)
-graph = create_vulnresearch_agent()
+# Module-level graph for LangGraph Platform.
+#
+# Construction is guarded by ``is_bundle_enabled("plugins")``: when the
+# bundle is disabled (the OSS default) the subagent roster is empty,
+# which would otherwise cause ``SubAgentMiddleware`` to raise at
+# module-import time. Skipping construction keeps ``import
+# decepticon.agents.plugins.vulnresearch`` side-effect-free for default
+# installs; opt-in via ``DECEPTICON_PLUGINS=standard,plugins`` (or the
+# equivalent config-file entry) flips this on.
+if is_bundle_enabled("plugins"):
+    graph = create_vulnresearch_agent()

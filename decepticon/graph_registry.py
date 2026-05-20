@@ -20,13 +20,16 @@ from __future__ import annotations
 
 import json
 
-from decepticon.plugin_loader import load_plugin_agents
+from decepticon.plugin_loader import is_bundle_enabled, load_plugin_agents
 
-# Built-in graphs — kept in sync with ``langgraph.json``. When you add a
-# graph inside OSS, update both. External packages MUST use entry-points
-# in the ``decepticon.agents`` group rather than editing this list.
-BUILTIN_GRAPHS: dict[str, str] = {
-    # Standard bundle — official OSS main agent + subagents + soundwave.
+# Built-in graphs split by bundle. ``build_langserve_graphs`` merges only
+# the bundles active under DECEPTICON_PLUGINS / config file (see
+# ``decepticon.plugin_loader._enabled_bundles``). External plugin
+# packages register agents under the ``decepticon.agents`` entry-point
+# group and are always loaded when installed.
+
+# Standard bundle — official OSS main agent + subagents + soundwave.
+STANDARD_GRAPHS: dict[str, str] = {
     "decepticon": "./decepticon/agents/standard/decepticon.py:graph",
     "recon": "./decepticon/agents/standard/recon.py:graph",
     "soundwave": "./decepticon/agents/standard/soundwave.py:graph",
@@ -37,7 +40,12 @@ BUILTIN_GRAPHS: dict[str, str] = {
     "contract_auditor": "./decepticon/agents/standard/contract_auditor.py:graph",
     "cloud_hunter": "./decepticon/agents/standard/cloud_hunter.py:graph",
     "ad_operator": "./decepticon/agents/standard/ad_operator.py:graph",
-    # Plugins bundle — vulnresearch main agent + 5 subagents (community shape).
+}
+
+# Plugins bundle — vulnresearch family (community-plugin shape demonstrated
+# from inside OSS). Opt-in via ``DECEPTICON_PLUGINS=standard,plugins`` or
+# ``[plugins] enabled = ["standard", "plugins"]`` in ``.decepticon.toml``.
+PLUGIN_GRAPHS: dict[str, str] = {
     "vulnresearch": "./decepticon/agents/plugins/vulnresearch.py:graph",
     "scanner": "./decepticon/agents/plugins/scanner.py:graph",
     "detector": "./decepticon/agents/plugins/detector.py:graph",
@@ -46,14 +54,32 @@ BUILTIN_GRAPHS: dict[str, str] = {
     "exploiter": "./decepticon/agents/plugins/exploiter.py:graph",
 }
 
+# Mapping from bundle name to its graph dict — used by build_langserve_graphs.
+_BUNDLE_TO_GRAPHS: dict[str, dict[str, str]] = {
+    "standard": STANDARD_GRAPHS,
+    "plugins": PLUGIN_GRAPHS,
+}
+
+# Backward-compat alias — full unfiltered manifest (every OSS-shipped graph).
+# Prefer ``build_langserve_graphs()`` which respects DECEPTICON_PLUGINS.
+BUILTIN_GRAPHS: dict[str, str] = {**STANDARD_GRAPHS, **PLUGIN_GRAPHS}
+
 
 def build_langserve_graphs() -> dict[str, str]:
-    """Return ``{name: module:graph}`` merged across OSS + discovered plugins.
+    """Return ``{name: module:graph}`` for active bundles + discovered plugins.
 
-    Plugin-contributed agents override built-in entries on name collision —
-    callers should treat the result as authoritative.
+    OSS-internal bundles (``standard``, ``plugins``) are filtered by
+    ``DECEPTICON_PLUGINS`` / config-file allowlist. Plugin-contributed
+    agents (registered under the ``decepticon.agents`` entry-point group
+    by external packages) are always merged in — installing the package
+    is the user's opt-in.
+
+    Name collisions: plugin-contributed agents override built-in entries.
     """
-    merged: dict[str, str] = dict(BUILTIN_GRAPHS)
+    merged: dict[str, str] = {}
+    for bundle_name, graphs in _BUNDLE_TO_GRAPHS.items():
+        if is_bundle_enabled(bundle_name):
+            merged.update(graphs)
     merged.update(load_plugin_agents())
     return merged
 

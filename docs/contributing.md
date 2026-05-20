@@ -84,7 +84,47 @@ Minimum Python version: **3.13**
    The relevant main agent picks it up automatically via
    `load_subagents_for_parent(...)`. See `decepticon/plugin_loader.py` for the
    contract.
-5. Create a skills directory at `skills/{name}/` if the agent needs dedicated skills
+5. Create a skills directory at `skills/{bundle}/{name}/` mirroring the agent
+   bundle (`standard/` or `plugins/`).
+
+### Activating plugin bundles
+
+Decepticon defaults to the lean `standard` bundle. To activate additional
+bundles (e.g. the `plugins` bundle that ships `vulnresearch`), use the
+4-tier hierarchy (highest precedence wins):
+
+1. **`DECEPTICON_PLUGINS` env var** — runtime override:
+   ```bash
+   DECEPTICON_PLUGINS=standard,plugins langgraph dev   # or "*" for all
+   ```
+2. **`.decepticon.toml` in CWD** — per-checkout opt-in:
+   ```toml
+   [plugins]
+   enabled = ["standard", "plugins"]
+   ```
+3. **`pyproject.toml` in CWD** — project-default opt-in:
+   ```toml
+   [tool.decepticon.plugins]
+   enabled = ["standard", "plugins"]
+   ```
+4. **Hardcoded default** — `["standard"]`.
+
+The OSS repo itself ships with both bundles enabled via the project-level
+`pyproject.toml` (so `make dev` / `make benchmark` work out of the box).
+End-user installs that just `pip install decepticon` get the lean
+`standard`-only default. SaaS Docker images override via
+`ENV DECEPTICON_PLUGINS=standard,saas` to activate their own bundle.
+
+The OSS-shipped `langgraph.json` matches the lean default — it only
+lists the 10 `standard` graphs. To expose plugin graphs to LangGraph
+Platform, emit the manifest dynamically:
+
+```bash
+LANGSERVE_GRAPHS="$(python -m decepticon.graph_registry)" langgraph dev
+```
+
+That CLI emits the merged manifest of every active bundle plus any
+external `decepticon.agents` entry-points.
 
 ---
 

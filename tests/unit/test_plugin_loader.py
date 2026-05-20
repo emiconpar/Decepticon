@@ -263,3 +263,208 @@ def test_load_subagents_factory_is_lazy():
     # caller invokes when ready
     assert result[0].factory() == "agent-instance"
     assert invocations["count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Bundle activation — 4-tier hierarchy
+#   1 (highest) DECEPTICON_PLUGINS env var
+#   2           .decepticon.toml [plugins].enabled
+#   3           pyproject.toml [tool.decepticon.plugins].enabled
+#   4 (lowest)  hardcoded ``DEFAULT_BUNDLES``
+# ---------------------------------------------------------------------------
+
+
+def test_enabled_bundles_default_is_standard_only(monkeypatch, tmp_path):
+    """No env, no config file → DEFAULT_BUNDLES (standard)."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"standard"})
+
+
+def test_enabled_bundles_env_overrides_default(monkeypatch, tmp_path):
+    """Env var beats hardcoded default."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard,plugins,saas")
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"standard", "plugins", "saas"})
+
+
+def test_enabled_bundles_env_wildcard(monkeypatch, tmp_path):
+    """``*`` returns wildcard sentinel (empty frozenset)."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "*")
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset()
+
+
+def test_enabled_bundles_env_strips_whitespace(monkeypatch, tmp_path):
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, " standard , plugins ,, ")
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"standard", "plugins"})
+
+
+def test_enabled_bundles_pyproject_used_when_no_env(monkeypatch, tmp_path):
+    """pyproject.toml ``[tool.decepticon.plugins].enabled`` used if env unset."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.decepticon.plugins]\nenabled = ["standard", "plugins"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"standard", "plugins"})
+
+
+def test_enabled_bundles_decepticon_toml_beats_pyproject(monkeypatch, tmp_path):
+    """``.decepticon.toml`` is higher precedence than pyproject.toml."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.decepticon.plugins]\nenabled = ["standard", "plugins"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".decepticon.toml").write_text(
+        '[plugins]\nenabled = ["standard"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"standard"})
+
+
+def test_enabled_bundles_env_beats_config_files(monkeypatch, tmp_path):
+    """Env var is top of the hierarchy — beats both config files."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "saas")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.decepticon.plugins]\nenabled = ["standard", "plugins"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".decepticon.toml").write_text(
+        '[plugins]\nenabled = ["standard", "premium"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset({"saas"})
+
+
+def test_enabled_bundles_config_wildcard(monkeypatch, tmp_path):
+    """``enabled = "*"`` or ``["*"]`` in config file → wildcard."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    (tmp_path / ".decepticon.toml").write_text(
+        '[plugins]\nenabled = "*"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader._enabled_bundles() == frozenset()
+
+
+def test_enabled_bundles_broken_config_falls_through(monkeypatch, tmp_path, caplog):
+    """Malformed config file → logged + skipped, falls through to default."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    (tmp_path / ".decepticon.toml").write_text(
+        'this is not valid toml [\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    with caplog.at_level("ERROR", logger="decepticon.plugin_loader"):
+        result = plugin_loader._enabled_bundles()
+    assert result == frozenset({"standard"})
+    assert any(".decepticon.toml" in r.getMessage() for r in caplog.records)
+
+
+def test_is_bundle_enabled_semantics(monkeypatch, tmp_path):
+    """bundle=None always passes; explicit bundle gated by allowlist."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader.is_bundle_enabled("standard") is True
+    assert plugin_loader.is_bundle_enabled("plugins") is False  # not in default
+    assert plugin_loader.is_bundle_enabled(None) is True
+
+
+def test_is_bundle_enabled_wildcard_passes_everything(monkeypatch, tmp_path):
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "*")
+    monkeypatch.chdir(tmp_path)
+    assert plugin_loader.is_bundle_enabled("standard") is True
+    assert plugin_loader.is_bundle_enabled("anything") is True
+    assert plugin_loader.is_bundle_enabled(None) is True
+
+
+# ---------------------------------------------------------------------------
+# Bundle filter applies to subagents
+# ---------------------------------------------------------------------------
+
+
+def test_load_subagents_filters_by_default_bundle(monkeypatch, tmp_path):
+    """With default DECEPTICON_PLUGINS=standard, only standard specs returned."""
+    monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
+    monkeypatch.chdir(tmp_path)
+    specs = [
+        _spec("recon", parents=("decepticon",), bundle="standard", priority=10),
+        _spec("scanner", parents=("decepticon",), bundle="plugins", priority=20),
+        _spec("audit", parents=("decepticon",), bundle="saas", priority=30),
+    ]
+    eps = [_FakeEntryPoint(s.name, f"pkg.{s.name}", s) for s in specs]
+    with patch.object(plugin_loader, "entry_points", return_value=eps):
+        result = plugin_loader.load_subagents_for_parent("decepticon")
+    assert [s.name for s in result] == ["recon"]
+
+
+def test_load_subagents_filter_opts_in_via_env(monkeypatch, tmp_path):
+    """Explicit env opt-in pulls in matching bundles."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard,plugins")
+    monkeypatch.chdir(tmp_path)
+    specs = [
+        _spec("recon", parents=("decepticon",), bundle="standard", priority=10),
+        _spec("scanner", parents=("decepticon",), bundle="plugins", priority=20),
+        _spec("audit", parents=("decepticon",), bundle="saas", priority=30),
+    ]
+    eps = [_FakeEntryPoint(s.name, f"pkg.{s.name}", s) for s in specs]
+    with patch.object(plugin_loader, "entry_points", return_value=eps):
+        result = plugin_loader.load_subagents_for_parent("decepticon")
+    assert [s.name for s in result] == ["recon", "scanner"]
+
+
+def test_load_subagents_no_bundle_always_loads(monkeypatch, tmp_path):
+    """SubAgentSpec(bundle=None) loads even with restrictive env."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard")
+    monkeypatch.chdir(tmp_path)
+    spec = _spec("free", parents=("decepticon",), bundle=None, priority=10)
+    ep = _FakeEntryPoint("free", "pkg.free", spec)
+    with patch.object(plugin_loader, "entry_points", return_value=[ep]):
+        result = plugin_loader.load_subagents_for_parent("decepticon")
+    assert [s.name for s in result] == ["free"]
+
+
+# ---------------------------------------------------------------------------
+# PluginBundle wrapper — applied to tools/middleware/callbacks discovery
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_bundle_filtered_when_inactive(monkeypatch, tmp_path):
+    """PluginBundle(bundle='premium') is dropped when env disables it."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard")
+    monkeypatch.chdir(tmp_path)
+    tool_a = MagicMock(invoke=MagicMock())
+    bundle = plugin_loader.PluginBundle(items=(tool_a,), bundle="premium")
+    ep = _FakeEntryPoint("premium-tools", "pkg:TOOLS", bundle)
+    with patch.object(plugin_loader, "entry_points", return_value=[ep]):
+        assert plugin_loader.load_plugin_tools() == []
+
+
+def test_plugin_bundle_loaded_when_active(monkeypatch, tmp_path):
+    """PluginBundle items unpacked when bundle is in the allowlist."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard,premium")
+    monkeypatch.chdir(tmp_path)
+    tool_a = MagicMock(invoke=MagicMock())
+    tool_b = MagicMock(invoke=MagicMock())
+    bundle = plugin_loader.PluginBundle(items=(tool_a, tool_b), bundle="premium")
+    ep = _FakeEntryPoint("premium-tools", "pkg:TOOLS", bundle)
+    with patch.object(plugin_loader, "entry_points", return_value=[ep]):
+        result = plugin_loader.load_plugin_tools()
+    assert result == [tool_a, tool_b]
+
+
+def test_plain_list_export_always_loads(monkeypatch, tmp_path):
+    """Plain list (no PluginBundle wrapper) loads regardless of env."""
+    monkeypatch.setenv(plugin_loader.PLUGINS_ENV_VAR, "standard")
+    monkeypatch.chdir(tmp_path)
+    tool_a = MagicMock(invoke=MagicMock())
+    ep = _FakeEntryPoint("compat-tools", "pkg:tools", [tool_a])
+    with patch.object(plugin_loader, "entry_points", return_value=[ep]):
+        result = plugin_loader.load_plugin_tools()
+    assert result == [tool_a]

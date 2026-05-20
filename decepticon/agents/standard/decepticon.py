@@ -51,6 +51,7 @@ from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
 from decepticon.plugin_loader import (
+    is_bundle_enabled,
     load_plugin_middleware,
     load_plugin_tools,
     load_subagents_for_parent,
@@ -166,5 +167,12 @@ def create_decepticon_agent():
     return agent.with_config({"recursion_limit": 400})
 
 
-# Module-level graph for LangGraph Platform (langgraph serve)
-graph = create_decepticon_agent()
+# Module-level graph for LangGraph Platform.
+#
+# Construction is guarded by ``is_bundle_enabled("standard")`` for
+# symmetry with the plugins bundle's main agent. The OSS default
+# (``DECEPTICON_PLUGINS`` unset or set to ``standard``) keeps this on;
+# if a user explicitly disables standard (e.g. ``DECEPTICON_PLUGINS=plugins``)
+# the graph is skipped to avoid empty-subagent crashes.
+if is_bundle_enabled("standard"):
+    graph = create_decepticon_agent()

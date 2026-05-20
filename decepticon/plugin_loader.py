@@ -35,8 +35,11 @@ bugs and absent plugin environments (pure OSS users see no behavior change).
 from __future__ import annotations
 
 import logging
+import os
+import tomllib
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
+from pathlib import Path
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -46,6 +49,159 @@ MIDDLEWARE_GROUP = "decepticon.middleware"
 AGENTS_GROUP = "decepticon.agents"
 SUBAGENTS_GROUP = "decepticon.subagents"
 CALLBACKS_GROUP = "decepticon.callbacks"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bundle activation — 4-tier hybrid hierarchy (Claude-Code/Django style).
+#
+# Highest to lowest precedence (first one that sets a value wins):
+#
+#   1. DECEPTICON_PLUGINS env var          ← runtime override (Docker, CI)
+#   2. .decepticon.toml [plugins].enabled  ← per-checkout opt-in (CWD)
+#   3. pyproject.toml [tool.decepticon.plugins].enabled  ← project default (CWD)
+#   4. Hardcoded default: {"standard"}     ← lean OSS baseline
+#
+# Special value ``"*"`` in any tier → wildcard sentinel (all bundles).
+#
+# External plugin packages always load when pip-installed; their
+# entry-point contributions can wrap output in ``PluginBundle`` to opt
+# into the same allowlist (e.g. ``bundle="saas"`` requires that string
+# in DECEPTICON_PLUGINS / config file).
+# ─────────────────────────────────────────────────────────────────────────────
+
+PLUGINS_ENV_VAR = "DECEPTICON_PLUGINS"
+DEFAULT_BUNDLES: frozenset[str] = frozenset({"standard"})
+_WILDCARD: frozenset[str] = frozenset()  # empty frozenset sentinel — "all"
+
+
+def _normalize_bundles_value(value: Any) -> frozenset[str] | None:
+    """Convert a config-file value to a bundles frozenset.
+
+    Accepts ``"*"`` (wildcard sentinel), ``["*"]``, comma-separated string,
+    or list/tuple of strings. Returns None if the shape is invalid so the
+    caller can fall through to the next tier rather than silently
+    accepting garbage.
+    """
+    if value == "*" or value == ["*"]:
+        return _WILDCARD
+    if isinstance(value, str):
+        return frozenset(name.strip() for name in value.split(",") if name.strip())
+    if isinstance(value, (list, tuple)):
+        return frozenset(str(v).strip() for v in value if str(v).strip())
+    return None
+
+
+def _config_file_bundles() -> frozenset[str] | None:
+    """Resolve bundles from config files in CWD. Returns None if neither set.
+
+    Lookup order (first match wins):
+      1. ``.decepticon.toml`` →  ``[plugins] enabled = [...]``
+      2. ``pyproject.toml``   →  ``[tool.decepticon.plugins] enabled = [...]``
+
+    Read errors are logged and treated as "not configured" so a broken
+    config file never blocks the loader — the next tier provides a
+    fallback.
+    """
+    cwd = Path.cwd()
+
+    decepticon_toml = cwd / ".decepticon.toml"
+    if decepticon_toml.is_file():
+        try:
+            data = tomllib.loads(decepticon_toml.read_text(encoding="utf-8"))
+            value = data.get("plugins", {}).get("enabled")
+            if value is not None:
+                normalized = _normalize_bundles_value(value)
+                if normalized is not None:
+                    return normalized
+        except Exception:
+            logger.exception("failed to read %s", decepticon_toml)
+
+    pyproject = cwd / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+            value = (
+                data.get("tool", {})
+                .get("decepticon", {})
+                .get("plugins", {})
+                .get("enabled")
+            )
+            if value is not None:
+                normalized = _normalize_bundles_value(value)
+                if normalized is not None:
+                    return normalized
+        except Exception:
+            logger.exception("failed to read %s", pyproject)
+
+    return None
+
+
+def _enabled_bundles() -> frozenset[str]:
+    """Resolve active bundles via 4-tier hybrid hierarchy.
+
+    See module-level comment for tier order. Read at call time so tests
+    and multi-process workers see env / config changes without restarting.
+    """
+    # Tier 1: env var override
+    raw = os.environ.get(PLUGINS_ENV_VAR, "").strip()
+    if raw:
+        if raw == "*":
+            return _WILDCARD
+        return frozenset(name.strip() for name in raw.split(",") if name.strip())
+
+    # Tier 2-3: config files in CWD
+    file_value = _config_file_bundles()
+    if file_value is not None:
+        return file_value
+
+    # Tier 4: hardcoded default
+    return DEFAULT_BUNDLES
+
+
+def is_bundle_enabled(bundle: str | None) -> bool:
+    """Return True if ``bundle`` is active under current DECEPTICON_PLUGINS.
+
+    - Wildcard env (``DECEPTICON_PLUGINS=*``) → True for any bundle.
+    - ``bundle is None`` → True. Specs without a declared bundle are
+      treated as "always-load when installed" (the package-install
+      already implies opt-in, matching Claude Code's MCP-server model).
+    - Otherwise: True iff ``bundle`` is in the active allowlist.
+    """
+    enabled = _enabled_bundles()
+    if not enabled:
+        return True
+    if bundle is None:
+        return True
+    return bundle in enabled
+
+
+@dataclass(frozen=True)
+class PluginBundle:
+    """Optional wrapper for entry-point contributions to declare bundle membership.
+
+    Plugin authors who want bundle-level activation control wrap their
+    tools / middleware / callbacks in this. Plain list returns (the
+    existing convention) keep working as ``bundle=None`` — always-load
+    when installed, matching Claude Code's MCP-server semantics.
+
+    Example::
+
+        # my_plugin/tools.py
+        from decepticon.plugin_loader import PluginBundle
+        from langchain_core.tools import tool
+
+        @tool
+        def my_premium_tool(query: str) -> str:
+            ...
+
+        # pyproject.toml entry-point points at this constant:
+        TOOLS = PluginBundle(items=(my_premium_tool,), bundle="premium")
+
+        # Only loaded when DECEPTICON_PLUGINS includes "premium".
+    """
+
+    items: tuple[Any, ...] = ()
+    bundle: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,7 +290,12 @@ def _discover(group: str, role: str | None, **deps: Any) -> list[Any]:
             logger.exception("failed to invoke plugin factory %s in group %s", ep.name, group)
             continue
 
-        if isinstance(result, (list, tuple)):
+        # ``PluginBundle`` wrapper — apply bundle filter then unpack items.
+        if isinstance(result, PluginBundle):
+            if not is_bundle_enabled(result.bundle):
+                continue
+            found.extend(result.items)
+        elif isinstance(result, (list, tuple)):
             found.extend(result)
         elif result is not None:
             found.append(result)
@@ -235,14 +396,29 @@ def _discover_subagent_specs() -> list[SubAgentSpec]:
 
 
 def load_subagents_for_parent(parent: str) -> list[SubAgentSpec]:
-    """Discover subagents whose ``parent_agents`` includes ``parent``.
+    """Discover subagents for ``parent`` whose ``bundle`` is active.
+
+    Two filters apply:
+      1. ``parent`` must be in the spec's ``parent_agents`` tuple.
+      2. The spec's ``bundle`` must be active under ``DECEPTICON_PLUGINS``
+         (see ``is_bundle_enabled``).
 
     Returned in stable order: ``(priority, name)``. Main-agent factories
     iterate this list to build their ``SubAgentMiddleware`` roster, so
     adding a new subagent (OSS-side or plugin-side) is a pure
     entry-point registration — no main-agent edits required.
+
+    Default ``DECEPTICON_PLUGINS=standard`` returns only ``bundle="standard"``
+    subagents. To activate the OSS ``plugins`` bundle (vulnresearch family),
+    set ``DECEPTICON_PLUGINS=standard,plugins``. SaaS plugin packages set
+    their own bundle (e.g. ``bundle="saas"``) and the SaaS Docker image
+    activates it via ``ENV DECEPTICON_PLUGINS=standard,saas``.
     """
-    matched = [s for s in _discover_subagent_specs() if parent in s.parent_agents]
+    matched = [
+        s
+        for s in _discover_subagent_specs()
+        if parent in s.parent_agents and is_bundle_enabled(s.bundle)
+    ]
     matched.sort(key=lambda s: (s.priority, s.name))
     return matched
 
