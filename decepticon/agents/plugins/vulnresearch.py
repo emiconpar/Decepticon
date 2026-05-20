@@ -37,6 +37,7 @@ from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
 from decepticon.plugin_loader import (
     is_bundle_enabled,
+    load_plugin_callbacks,
     load_plugin_middleware,
     load_plugin_tools,
     load_subagents_for_parent,
@@ -121,7 +122,7 @@ def create_vulnresearch_agent():
 
     # Higher ceiling than specialists because the orchestrator needs
     # many delegation rounds across five stages.
-    return agent.with_config({"recursion_limit": 250})
+    return agent.with_config({"recursion_limit": 250, "callbacks": load_plugin_callbacks(role="vulnresearch", backend=backend)})
 
 
 # Module-level graph for LangGraph Platform.

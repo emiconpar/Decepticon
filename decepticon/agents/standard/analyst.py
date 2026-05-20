@@ -28,7 +28,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import SubAgentSpec, load_plugin_middleware, load_plugin_tools
+from decepticon.plugin_loader import SubAgentSpec, load_plugin_callbacks, load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
@@ -101,7 +101,7 @@ def create_analyst_agent():
         tools=tools,
         middleware=middleware,
         name="analyst",
-    ).with_config({"recursion_limit": 250})
+    ).with_config({"recursion_limit": 250, "callbacks": load_plugin_callbacks(role="analyst", backend=backend)})
 
     return agent
 

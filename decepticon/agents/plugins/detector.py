@@ -31,7 +31,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import DockerSandbox
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import SubAgentSpec, load_plugin_middleware, load_plugin_tools
+from decepticon.plugin_loader import SubAgentSpec, load_plugin_callbacks, load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import FilesystemMiddleware
 from decepticon.middleware.skills import SkillsMiddleware
 from decepticon.tools.research.tools import (
@@ -108,7 +108,7 @@ def create_detector_agent():
         tools=tools,
         middleware=middleware,
         name="detector",
-    ).with_config({"recursion_limit": 120})
+    ).with_config({"recursion_limit": 120, "callbacks": load_plugin_callbacks(role="detector", backend=backend)})
 
     return agent
 
