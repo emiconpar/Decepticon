@@ -120,12 +120,7 @@ def _config_file_bundles() -> frozenset[str] | None:
     if pyproject.is_file():
         try:
             data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-            value = (
-                data.get("tool", {})
-                .get("decepticon", {})
-                .get("plugins", {})
-                .get("enabled")
-            )
+            value = data.get("tool", {}).get("decepticon", {}).get("plugins", {}).get("enabled")
             if value is not None:
                 normalized = _normalize_bundles_value(value)
                 if normalized is not None:
@@ -245,6 +240,7 @@ class SubAgentSpec:
     bundle: str | None = None
     priority: int = 100
     skill_sources: tuple[str, ...] = field(default_factory=tuple)
+
 
 # Attributes that distinguish a Tool/Middleware/Callback INSTANCE from a
 # factory callable. If any of these are present we treat the object as a

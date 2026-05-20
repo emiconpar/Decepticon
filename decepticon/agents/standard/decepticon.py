@@ -50,18 +50,18 @@ from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
+from decepticon.middleware import (
+    EngagementContextMiddleware,
+    FilesystemMiddleware,
+    OPPLANMiddleware,
+    SkillsMiddleware,
+)
 from decepticon.plugin_loader import (
     is_bundle_enabled,
     load_plugin_callbacks,
     load_plugin_middleware,
     load_plugin_tools,
     load_subagents_for_parent,
-)
-from decepticon.middleware import (
-    EngagementContextMiddleware,
-    FilesystemMiddleware,
-    OPPLANMiddleware,
-    SkillsMiddleware,
 )
 
 
@@ -165,7 +165,12 @@ def create_decepticon_agent():
     )
 
     # Higher recursion budget than sub-agents (100) — top-level coordinator.
-    return agent.with_config({"recursion_limit": 400, "callbacks": load_plugin_callbacks(role="decepticon", backend=backend)})
+    return agent.with_config(
+        {
+            "recursion_limit": 400,
+            "callbacks": load_plugin_callbacks(role="decepticon", backend=backend),
+        }
+    )
 
 
 # Module-level graph for LangGraph Platform.

@@ -13,13 +13,18 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import SubAgentSpec, load_plugin_callbacks, load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
     SandboxNotificationMiddleware,
 )
 from decepticon.middleware.skills import SkillsMiddleware
+from decepticon.plugin_loader import (
+    SubAgentSpec,
+    load_plugin_callbacks,
+    load_plugin_middleware,
+    load_plugin_tools,
+)
 from decepticon.tools.ad.tools import AD_TOOLS
 from decepticon.tools.bash import BASH_TOOLS
 from decepticon.tools.bash.bash import set_sandbox
@@ -50,7 +55,8 @@ def create_ad_operator_agent():
     middleware = [
         EngagementContextMiddleware(),
         SkillsMiddleware(
-            backend=backend, sources=["/skills/standard/ad/", "/skills/shared/", *benchmark_skill_sources()]
+            backend=backend,
+            sources=["/skills/standard/ad/", "/skills/shared/", *benchmark_skill_sources()],
         ),
         FilesystemMiddleware(backend=backend),
         SandboxNotificationMiddleware(sandbox=sandbox),
@@ -90,7 +96,12 @@ def create_ad_operator_agent():
         tools=tools,
         middleware=middleware,
         name="ad_operator",
-    ).with_config({"recursion_limit": 250, "callbacks": load_plugin_callbacks(role="ad_operator", backend=backend)})
+    ).with_config(
+        {
+            "recursion_limit": 250,
+            "callbacks": load_plugin_callbacks(role="ad_operator", backend=backend),
+        }
+    )
     return agent
 
 

@@ -6,7 +6,6 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-
 # ── load_skill tool ──────────────────────────────────────────────────────────
 # A Decepticon-specific replacement for `load_skill("/skills/...")` that
 # returns the full skill body without the deepagents 100-line limit, plus a

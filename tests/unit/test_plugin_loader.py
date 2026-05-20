@@ -357,7 +357,7 @@ def test_enabled_bundles_broken_config_falls_through(monkeypatch, tmp_path, capl
     """Malformed config file → logged + skipped, falls through to default."""
     monkeypatch.delenv(plugin_loader.PLUGINS_ENV_VAR, raising=False)
     (tmp_path / ".decepticon.toml").write_text(
-        'this is not valid toml [\n',
+        "this is not valid toml [\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)

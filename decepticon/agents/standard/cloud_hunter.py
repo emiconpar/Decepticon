@@ -13,13 +13,18 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.core.config import load_config
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import SubAgentSpec, load_plugin_callbacks, load_plugin_middleware, load_plugin_tools
 from decepticon.middleware import (
     EngagementContextMiddleware,
     FilesystemMiddleware,
     SandboxNotificationMiddleware,
 )
 from decepticon.middleware.skills import SkillsMiddleware
+from decepticon.plugin_loader import (
+    SubAgentSpec,
+    load_plugin_callbacks,
+    load_plugin_middleware,
+    load_plugin_tools,
+)
 from decepticon.tools.bash import BASH_TOOLS
 from decepticon.tools.bash.bash import set_sandbox
 from decepticon.tools.cloud.tools import CLOUD_TOOLS
@@ -87,7 +92,12 @@ def create_cloud_hunter_agent():
         tools=tools,
         middleware=middleware,
         name="cloud_hunter",
-    ).with_config({"recursion_limit": 250, "callbacks": load_plugin_callbacks(role="cloud_hunter", backend=backend)})
+    ).with_config(
+        {
+            "recursion_limit": 250,
+            "callbacks": load_plugin_callbacks(role="cloud_hunter", backend=backend),
+        }
+    )
     return agent
 
 

@@ -35,6 +35,8 @@ from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.core.config import load_config
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
+from decepticon.middleware import FilesystemMiddleware, OPPLANMiddleware
+from decepticon.middleware.skills import SkillsMiddleware
 from decepticon.plugin_loader import (
     is_bundle_enabled,
     load_plugin_callbacks,
@@ -42,8 +44,6 @@ from decepticon.plugin_loader import (
     load_plugin_tools,
     load_subagents_for_parent,
 )
-from decepticon.middleware import FilesystemMiddleware, OPPLANMiddleware
-from decepticon.middleware.skills import SkillsMiddleware
 from decepticon.tools.research.tools import kg_query, kg_stats
 
 
@@ -91,7 +91,11 @@ def create_vulnresearch_agent():
     middleware = [
         SkillsMiddleware(
             backend=backend,
-            sources=["/skills/plugins/vulnresearch/", "/skills/shared/", *benchmark_skill_sources()],
+            sources=[
+                "/skills/plugins/vulnresearch/",
+                "/skills/shared/",
+                *benchmark_skill_sources(),
+            ],
         ),
         FilesystemMiddleware(backend=backend),
         SubAgentMiddleware(backend=backend, subagents=subagents),
@@ -122,7 +126,12 @@ def create_vulnresearch_agent():
 
     # Higher ceiling than specialists because the orchestrator needs
     # many delegation rounds across five stages.
-    return agent.with_config({"recursion_limit": 250, "callbacks": load_plugin_callbacks(role="vulnresearch", backend=backend)})
+    return agent.with_config(
+        {
+            "recursion_limit": 250,
+            "callbacks": load_plugin_callbacks(role="vulnresearch", backend=backend),
+        }
+    )
 
 
 # Module-level graph for LangGraph Platform.
