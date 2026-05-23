@@ -70,6 +70,12 @@ extend-exclude = [
 select = ["E", "F", "I", "W"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+# Mark all three workspace packages as first-party so isort groups
+# them together instead of treating ``decepticon_core`` /
+# ``decepticon_sdk`` as third-party.
+known-first-party = ["decepticon", "decepticon_core", "decepticon_sdk"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["packages/decepticon/tests"]
