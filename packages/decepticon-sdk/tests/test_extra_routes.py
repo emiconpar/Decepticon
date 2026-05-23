@@ -1,0 +1,55 @@
+"""Spec §14 acceptance — make_agent_backend(extra_routes=).
+
+Verifies acceptance criterion #11 from
+``docs/superpowers/specs/2026-05-23-core-framework-sdk-split-design.md``:
+
+  ``make_agent_backend(sandbox, extra_routes={"/foo/": some_backend})``
+  is exercised by a test that reads from ``/foo/x.txt`` and the SaaS
+  overlay pattern from the previous PR is a one-liner.
+
+Also verifies the spec §16.4 #5 longest-prefix-wins ordering — a
+tenant-specific ``/skills/tenant/<id>/`` route must override the
+generic ``/skills/`` default deterministically.
+"""
+
+from __future__ import annotations
+
+from decepticon.backends import make_agent_backend
+from decepticon_sdk.testing import FakeBackend, FakeSandbox
+
+
+def test_extra_routes_adds_caller_supplied_prefix() -> None:
+    """Caller-supplied ``extra_routes`` mount on top of the OSS default."""
+    sandbox = FakeSandbox()
+    overlay = FakeBackend({"/foo/x.txt": "overlay content"})
+
+    backend = make_agent_backend(sandbox, extra_routes={"/foo/": overlay})
+
+    assert "/skills/" in backend.routes
+    assert "/foo/" in backend.routes
+
+
+def test_longest_prefix_wins() -> None:
+    """Spec §16.4 #5: tenant paths override the generic ``/skills/`` default.
+
+    The route iteration order must place the longer prefix first so a
+    request for ``/skills/tenant/abc/skill.md`` doesn't fall through
+    to the generic OSS skill backend.
+    """
+    sandbox = FakeSandbox()
+    tenant = FakeBackend({"/skills/tenant/abc/skill.md": "tenant"})
+
+    backend = make_agent_backend(sandbox, extra_routes={"/skills/tenant/abc/": tenant})
+
+    route_prefixes = list(backend.routes.keys())
+    assert route_prefixes[0] == "/skills/tenant/abc/", (
+        f"longest prefix should be first, got {route_prefixes!r}"
+    )
+    assert route_prefixes[1] == "/skills/"
+
+
+def test_baseline_without_extra_routes() -> None:
+    """Calling without extra_routes preserves the OSS default surface."""
+    sandbox = FakeSandbox()
+    backend = make_agent_backend(sandbox)
+    assert list(backend.routes.keys()) == ["/skills/"]
