@@ -46,8 +46,9 @@ jobs:
         with:
           filters: |
             python:
-              - 'decepticon/**'
-              - 'tests/**'
+              - 'packages/decepticon/**'
+              - 'packages/decepticon-core/**'
+              - 'packages/decepticon-sdk/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/ci.yml'
@@ -77,7 +78,9 @@ jobs:
           filters: |
             langgraph:
               - 'containers/langgraph.Dockerfile'
-              - 'decepticon/**'
+              - 'packages/decepticon/**'
+              - 'packages/decepticon-core/**'
+              - 'packages/decepticon-sdk/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/ci.yml'
@@ -88,10 +91,11 @@ jobs:
             sandbox:
               - 'containers/sandbox.Dockerfile'
               # Skills no longer ship in the sandbox image — they live under
-              # decepticon/skills and are read in-process by the langgraph
-              # service (see decepticon/backends/__init__.py). Skill changes
-              # rebuild langgraph (via the decepticon/** filter above), not
-              # the sandbox.
+              # packages/decepticon/src/decepticon/skills and are read
+              # in-process by the langgraph service (see
+              # packages/decepticon/src/decepticon/backends/__init__.py).
+              # Skill changes rebuild langgraph (via the packages/decepticon/**
+              # filter above), not the sandbox.
               - '.github/workflows/ci.yml'
             cli:
               - 'containers/cli.Dockerfile'
