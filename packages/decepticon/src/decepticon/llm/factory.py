@@ -32,6 +32,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
 from decepticon.llm.router import ModelRouter
+from decepticon_core.registry import RoleRegistry
 from decepticon_core.types.llm import (
     AuthMethod,
     Credentials,
@@ -873,16 +874,45 @@ class LLMFactory:
     def router(self) -> ModelRouter:
         return self._router
 
+    def _resolve_default_role(self, role: str, explicit: str | None) -> str | None:
+        """Pick ``default_role`` for ``ModelRouter.get_assignment``.
+
+        Resolution order:
+          1. caller-supplied ``explicit`` wins (existing behavior)
+          2. otherwise consult ``RoleRegistry`` for an
+             ``llm_role_fallback`` registered against ``role``
+          3. otherwise None (router will raise if it can't resolve)
+
+        Closes spec §8 gap #5 — plugin-shipped roles (e.g. SaaS
+        ``apt``) no longer need every call site to thread
+        ``default_role`` through manually; the registration spec
+        carries it.
+        """
+        if explicit is not None:
+            return explicit
+        spec = RoleRegistry.get(role)
+        if spec is None:
+            return None
+        return spec.llm_role_fallback
+
     def get_model(self, role: str, *, default_role: str | None = None) -> BaseChatModel:
         """Get the primary ChatModel for a role. Cached per role.
 
         ``default_role`` lets plugin orchestrators inherit an OSS role's
         assignment when their custom role is not in ``AGENT_TIERS`` —
         e.g. ``LLMFactory().get_model("decepticon-pro", default_role="decepticon")``.
+
+        When the caller leaves ``default_role`` unset, the factory consults
+        ``decepticon_core.registry.RoleRegistry`` for the role's registered
+        ``llm_role_fallback`` and uses that. This is how plugin-shipped
+        roles such as the SaaS ``apt`` orchestrator stop needing every call
+        site to thread ``default_role="decepticon"`` through manually
+        (closes spec §8 gap #5).
         """
         if role in self._cache:
             return self._cache[role]
 
+        default_role = self._resolve_default_role(role, default_role)
         assignment = self._router.get_assignment(role, default_role=default_role)
         log.info(
             "Creating LLM for role '%s' → model '%s' via %s",
@@ -905,6 +935,7 @@ class LLMFactory:
         ``ModelFallbackMiddleware(*models)``, which tries them in order
         until one succeeds. ``default_role`` works as in ``get_model``.
         """
+        default_role = self._resolve_default_role(role, default_role)
         assignment = self._router.get_assignment(role, default_role=default_role)
         if not assignment.fallbacks:
             return []
