@@ -1,15 +1,36 @@
-"""Re-export shim — content moved to ``decepticon_core.plugin_loader``.
+"""Compat shim — content moved to ``decepticon_core.plugin_loader``.
 
-Phase 1.B of the core/framework/sdk split relocates plugin discovery
-contracts into ``decepticon-core`` so plugin authors can import
-``PluginBundle`` and ``SubAgentSpec`` without the framework runtime.
-Phase 2 (framework retrofit) rewrites every internal call site to
-import from ``decepticon_core.plugin_loader`` directly; this shim is
-removed at 2.0.0 per spec §7.3.
-
-See ``docs/superpowers/specs/2026-05-23-core-framework-sdk-split-design.md``.
+See ``decepticon.core.schemas`` for the rationale and the PEP 562
+per-import DeprecationWarning pattern.
 """
 
 from __future__ import annotations
 
-from decepticon_core.plugin_loader import *  # noqa: F401, F403
+import warnings
+from typing import Any
+
+import decepticon_core.plugin_loader as _target
+
+_LEGACY = "decepticon.plugin_loader"
+_CANONICAL = "decepticon_core.plugin_loader"
+_seen: set[str] = set()
+
+
+def __getattr__(name: str) -> Any:
+    if name.startswith("_"):
+        # Dunder/private lookups (e.g. Pythons own __path__ probe during
+        # `from X import Y`) shouldn't emit deprecation noise.
+        raise AttributeError(name)
+    if name not in _seen:
+        _seen.add(name)
+        warnings.warn(
+            f"{_LEGACY}.{name} is deprecated; import from {_CANONICAL}.{name} instead "
+            f"(legacy path removed at 2.0.0)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    return getattr(_target, name)
+
+
+def __dir__() -> list[str]:
+    return dir(_target)
