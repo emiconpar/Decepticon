@@ -15,6 +15,21 @@ SafetyDeclaration) and ``PluginBundle`` proper (currently lives at
 
 from __future__ import annotations
 
-from decepticon_core.contracts import slots
+from decepticon_core.contracts import contributions, slots
+from decepticon_core.contracts.contributions import (
+    MiddlewareContribution,
+    PromptContribution,
+    SafetyDeclaration,
+    SubAgentContribution,
+    ToolContribution,
+)
 
-__all__ = ["slots"]
+__all__ = [
+    "MiddlewareContribution",
+    "PromptContribution",
+    "SafetyDeclaration",
+    "SubAgentContribution",
+    "ToolContribution",
+    "contributions",
+    "slots",
+]
