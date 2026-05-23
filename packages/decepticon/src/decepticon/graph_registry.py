@@ -20,11 +20,11 @@ from __future__ import annotations
 
 import json
 
-from decepticon.plugin_loader import is_bundle_enabled, load_plugin_agents
+from decepticon_core.plugin_loader import is_bundle_enabled, load_plugin_agents
 
 # Built-in graphs split by bundle. ``build_langserve_graphs`` merges only
 # the bundles active under DECEPTICON_PLUGINS / config file (see
-# ``decepticon.plugin_loader._enabled_bundles``). External plugin
+# ``decepticon_core.plugin_loader._enabled_bundles``). External plugin
 # packages register agents under the ``decepticon.agents`` entry-point
 # group and are always loaded when installed.
 

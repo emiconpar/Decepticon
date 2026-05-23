@@ -1,8 +1,8 @@
-"""Unit tests for decepticon.llm.models — tier-based, credentials-aware mapping."""
+"""Unit tests for decepticon_core.types.llm — tier-based, credentials-aware mapping."""
 
 import pytest
 
-from decepticon.llm.models import (
+from decepticon_core.types.llm import (
     AGENT_TEMPERATURES,
     AGENT_TIERS,
     METHOD_MODELS,

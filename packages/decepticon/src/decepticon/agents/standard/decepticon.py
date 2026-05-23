@@ -64,7 +64,7 @@ from decepticon.agents.prompts import load_prompt
 from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.core.subagent_streaming import StreamingRunnable
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import (
+from decepticon_core.plugin_loader import (
     is_bundle_enabled,
     load_plugin_callbacks,
     load_subagents_for_parent,

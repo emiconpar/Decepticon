@@ -1,6 +1,6 @@
 """Decepticon configuration — defaults + environment variable overrides.
 
-LLM model assignments are defined in decepticon.llm.models (LLMModelMapping).
+LLM model assignments are defined in decepticon_core.types.llm (LLMModelMapping).
 This config handles infrastructure settings: proxy connection.
 
 Sandbox transport is HTTP-only and configured via SAAS_SANDBOX_URL /
@@ -20,7 +20,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
-from decepticon.llm.models import ModelProfile
+from decepticon_core.types.llm import ModelProfile
 
 
 def _project_root() -> Path:

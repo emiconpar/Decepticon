@@ -38,8 +38,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 from typing_extensions import override
 
-from decepticon.core.logging import get_logger
 from decepticon.llm.factory import LLMFactory, _model_drops_temperature
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("middleware.model_override")
 

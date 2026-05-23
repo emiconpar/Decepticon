@@ -26,21 +26,11 @@ from urllib.parse import urlparse
 import defusedxml.ElementTree as ET
 from langchain_core.tools import tool
 
-from decepticon.core.logging import get_logger
 from decepticon.tools.contracts.patterns import scan_solidity_source
 from decepticon.tools.contracts.slither import ingest_slither_file
 from decepticon.tools.research import cve as cve_mod
 from decepticon.tools.research import fuzz as fuzz_mod
 from decepticon.tools.research.chain import critical_path_score, plan_chains, promote_chain
-from decepticon.tools.research.graph import (
-    SEVERITY_SCORE,
-    Edge,
-    EdgeKind,
-    KnowledgeGraph,
-    Node,
-    NodeKind,
-    Severity,
-)
 from decepticon.tools.research.health import backend_health
 from decepticon.tools.research.patch import PATCH_TOOLS
 from decepticon.tools.research.sarif import ingest_sarif_file
@@ -52,6 +42,16 @@ from decepticon.tools.reversing.symbols import summarize_symbols
 from decepticon.tools.web.jwt import parse_token
 from decepticon.tools.web.oauth import analyze_oauth_callback
 from decepticon.tools.web.session import analyze_cookie
+from decepticon_core.types.kg import (
+    SEVERITY_SCORE,
+    Edge,
+    EdgeKind,
+    KnowledgeGraph,
+    Node,
+    NodeKind,
+    Severity,
+)
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.tools")
 

@@ -16,10 +16,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from decepticon import plugin_loader
 from decepticon.agents import build as build_module
 from decepticon.agents.middleware_slots import MiddlewareSlot
-from decepticon.plugin_loader import PluginBundle
+from decepticon_core import plugin_loader
+from decepticon_core.plugin_loader import PluginBundle
 
 
 class _FakeEntryPoint:
@@ -424,7 +424,7 @@ def test_llm_mapping_get_assignment_default_role_fallback():
     can pass ``default_role=`` to inherit an OSS role's assignment.
     Opens ``LLMFactory`` for plugin use without forcing every plugin
     package to register its own ``AGENT_TIERS`` entry."""
-    from decepticon.llm.models import LLMModelMapping, ModelAssignment
+    from decepticon_core.types.llm import LLMModelMapping, ModelAssignment
 
     mapping = LLMModelMapping(
         assignments={

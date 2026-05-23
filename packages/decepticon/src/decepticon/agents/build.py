@@ -42,7 +42,7 @@ from decepticon.agents.middleware_slots import (
     SLOTS_PER_ROLE,
     MiddlewareSlot,
 )
-from decepticon.plugin_loader import (
+from decepticon_core.plugin_loader import (
     PluginBundle,
     is_bundle_enabled,
     load_plugin_middleware,

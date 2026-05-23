@@ -29,8 +29,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
-from decepticon.core.logging import get_logger
-from decepticon.tools.research.graph import Edge, EdgeKind, KnowledgeGraph, Node, NodeKind
+from decepticon_core.types.kg import Edge, EdgeKind, KnowledgeGraph, Node, NodeKind
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.neo4j")
 

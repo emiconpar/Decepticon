@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from decepticon.core.schemas import (
+from decepticon_core.types.engagement import (
     CONOPS,
     OPPLAN,
     AbortPlan,

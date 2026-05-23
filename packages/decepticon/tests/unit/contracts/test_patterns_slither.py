@@ -9,7 +9,7 @@ from decepticon.tools.contracts.foundry import (
 )
 from decepticon.tools.contracts.patterns import scan_solidity_source
 from decepticon.tools.contracts.slither import ingest_slither_json
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind, Severity
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind, Severity
 
 
 class TestPatternScanner:

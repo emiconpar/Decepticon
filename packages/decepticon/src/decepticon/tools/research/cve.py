@@ -35,7 +35,7 @@ from typing import Any
 
 import httpx
 
-from decepticon.core.logging import get_logger
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.cve")
 

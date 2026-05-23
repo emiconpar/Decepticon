@@ -42,7 +42,6 @@ from decepticon.agents.build import build_middleware, build_tools
 from decepticon.agents.prompts import load_prompt
 from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import SubAgentSpec, is_bundle_enabled, load_plugin_callbacks
 from decepticon.tools.bash import BASH_TOOLS
 from decepticon.tools.bash.bash import set_sandbox
 from decepticon.tools.cloud.tools import CLOUD_TOOLS
@@ -54,6 +53,7 @@ from decepticon.tools.research.tools import (
     kg_query,
     kg_stats,
 )
+from decepticon_core.plugin_loader import SubAgentSpec, is_bundle_enabled, load_plugin_callbacks
 
 _STANDARD_TOOLS: dict[str, Any] = {
     t.name: t

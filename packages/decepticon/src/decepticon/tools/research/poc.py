@@ -32,8 +32,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Awaitable, Callable
 
-from decepticon.core.logging import get_logger
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     Edge,
     EdgeKind,
     KnowledgeGraph,
@@ -41,6 +40,7 @@ from decepticon.tools.research.graph import (
     NodeKind,
     Severity,
 )
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.poc")
 

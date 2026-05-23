@@ -18,7 +18,7 @@ State is managed exclusively through Neo4j. Configure via environment:
 
 from __future__ import annotations
 
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     Edge,
     EdgeKind,
     KnowledgeGraph,

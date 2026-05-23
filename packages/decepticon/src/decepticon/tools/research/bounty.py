@@ -18,14 +18,14 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
-from decepticon.core.logging import get_logger
 from decepticon.tools.research._state import _json, _load, _save
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     EdgeKind,
     KnowledgeGraph,
     Node,
     NodeKind,
 )
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.bounty")
 

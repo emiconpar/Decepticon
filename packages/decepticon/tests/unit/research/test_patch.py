@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from decepticon.tools.research.graph import (
+from decepticon.tools.research.patch import patch_propose, patch_verify
+from decepticon_core.types.kg import (
     EdgeKind,
     KnowledgeGraph,
     Node,
     NodeKind,
     Severity,
 )
-from decepticon.tools.research.patch import patch_propose, patch_verify
 
 
 class _FakeStore:

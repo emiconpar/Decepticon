@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     Edge,
     EdgeKind,
     KnowledgeGraph,

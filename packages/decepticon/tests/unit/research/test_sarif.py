@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind, Severity
 from decepticon.tools.research.sarif import ingest_sarif, ingest_sarif_file
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind, Severity
 
 
 def _minimal_run(rule_id: str, severity_tag: str, level: str) -> dict:

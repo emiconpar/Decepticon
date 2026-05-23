@@ -51,8 +51,8 @@ from decepticon.agents.build import build_middleware, build_tools
 from decepticon.agents.prompts import load_prompt
 from decepticon.backends import build_sandbox_backend, make_agent_backend
 from decepticon.llm import LLMFactory
-from decepticon.plugin_loader import is_bundle_enabled, load_plugin_callbacks
 from decepticon.tools.interaction import ask_user_question, complete_engagement_planning
+from decepticon_core.plugin_loader import is_bundle_enabled, load_plugin_callbacks
 
 # Name-keyed registry of the standard tools. Exposed for library
 # callers who want to splice into the default set (e.g.

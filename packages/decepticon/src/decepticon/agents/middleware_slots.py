@@ -44,7 +44,6 @@ from decepticon.middleware import (
 )
 from decepticon.middleware.model_override import ModelOverrideMiddleware
 from decepticon.middleware.notifications import SandboxNotificationMiddleware
-from decepticon.plugin_loader import load_plugin_skill_sources
 
 # Slot enum + per-role applicability mapping + safety-critical set
 # all live in the contract layer now (decepticon_core.contracts.slots).
@@ -60,6 +59,7 @@ from decepticon_core.contracts.slots import (
     SLOTS_PER_ROLE,
     MiddlewareSlot,
 )
+from decepticon_core.plugin_loader import load_plugin_skill_sources
 
 # ─────────────────────────────────────────────────────────────────────
 # Skills sources — role-specific

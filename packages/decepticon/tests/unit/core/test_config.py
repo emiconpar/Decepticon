@@ -1,6 +1,6 @@
-"""Unit tests for decepticon.core.config"""
+"""Unit tests for decepticon_core.utils.config"""
 
-from decepticon.core.config import DecepticonConfig, load_config
+from decepticon_core.utils.config import DecepticonConfig, load_config
 
 
 class TestDecepticonConfig:

@@ -15,8 +15,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from decepticon.core.logging import get_logger
 from decepticon.tools.research.neo4j_store import Neo4jStore
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.state")
 

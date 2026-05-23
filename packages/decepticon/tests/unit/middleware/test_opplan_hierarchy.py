@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from decepticon.core.schemas import (
+from decepticon.tools.opplan import build_opplan_tools
+from decepticon_core.types.engagement import (
     OPPLAN,
     Objective,
     ObjectivePhase,
     ObjectiveStatus,
 )
-from decepticon.tools.opplan import build_opplan_tools
 
 
 def _objective(

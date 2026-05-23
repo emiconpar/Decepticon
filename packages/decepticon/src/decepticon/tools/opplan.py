@@ -13,7 +13,7 @@ from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 
-from decepticon.core.schemas import (
+from decepticon_core.types.engagement import (
     OPPLAN,
     C2Tier,
     Objective,

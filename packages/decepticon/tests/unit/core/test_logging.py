@@ -1,4 +1,4 @@
-"""Unit tests for decepticon.core.logging."""
+"""Unit tests for decepticon_core.utils.logging."""
 
 from __future__ import annotations
 
@@ -120,6 +120,6 @@ class TestConfigureLogging:
         dlog.configure_logging()
         root = logging.getLogger("decepticon")
         assert root.level == logging.DEBUG
-        from decepticon.core.logging import _JsonFormatter
+        from decepticon_core.utils.logging import _JsonFormatter
 
         assert isinstance(root.handlers[0].formatter, _JsonFormatter)

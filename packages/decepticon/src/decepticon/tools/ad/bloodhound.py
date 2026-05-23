@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     Edge,
     EdgeKind,
     KnowledgeGraph,

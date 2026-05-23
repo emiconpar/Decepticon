@@ -10,8 +10,8 @@ import pytest
 from decepticon.tools.research import _state as state
 from decepticon.tools.research import tools as research_tools
 from decepticon.tools.research.cve import Exploitability
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind
 from decepticon.tools.web.jwt import forge_token
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind
 
 
 class _FakeStore:

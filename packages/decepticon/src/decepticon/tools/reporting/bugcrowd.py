@@ -14,7 +14,7 @@ import csv
 import io
 from typing import Iterable
 
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind
 
 _HEADER: tuple[str, ...] = (
     "title",

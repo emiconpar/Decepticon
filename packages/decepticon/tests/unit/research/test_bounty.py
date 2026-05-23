@@ -52,7 +52,7 @@ from decepticon.tools.research.bounty import (  # noqa: E402
     _normalize_class,
     _severity_label,
 )
-from decepticon.tools.research.graph import (  # noqa: E402
+from decepticon_core.types.kg import (  # noqa: E402
     Edge,
     EdgeKind,
     KnowledgeGraph,

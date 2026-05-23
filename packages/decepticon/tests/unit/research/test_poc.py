@@ -4,11 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from decepticon.tools.research.graph import (
-    KnowledgeGraph,
-    Node,
-    NodeKind,
-)
 from decepticon.tools.research.poc import (
     AC,
     AV,
@@ -20,6 +15,11 @@ from decepticon.tools.research.poc import (
     Severity,
     _match_signals,
     validate_poc,
+)
+from decepticon_core.types.kg import (
+    KnowledgeGraph,
+    Node,
+    NodeKind,
 )
 
 

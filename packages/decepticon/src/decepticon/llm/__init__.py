@@ -1,5 +1,6 @@
 from decepticon.llm.factory import LLMFactory, create_llm
-from decepticon.llm.models import (
+from decepticon.llm.router import ModelRouter
+from decepticon_core.types.llm import (
     AuthMethod,
     Credentials,
     LLMModelMapping,
@@ -8,7 +9,6 @@ from decepticon.llm.models import (
     ProxyConfig,
     Tier,
 )
-from decepticon.llm.router import ModelRouter
 
 __all__ = [
     "AuthMethod",

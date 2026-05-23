@@ -26,14 +26,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from decepticon.core.logging import get_logger
 from decepticon.tools.research._state import get_store
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     SEVERITY_SCORE,
     EdgeKind,
     NodeKind,
     Severity,
 )
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("research.chain")
 

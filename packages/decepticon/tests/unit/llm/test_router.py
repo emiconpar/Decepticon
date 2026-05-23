@@ -2,14 +2,14 @@
 
 import pytest
 
-from decepticon.llm.models import (
+from decepticon.llm.router import ModelRouter
+from decepticon_core.types.llm import (
     AuthMethod,
     Credentials,
     LLMModelMapping,
     ModelAssignment,
     ModelProfile,
 )
-from decepticon.llm.router import ModelRouter
 
 
 class TestModelRouter:

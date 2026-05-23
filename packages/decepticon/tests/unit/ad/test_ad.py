@@ -6,7 +6,7 @@ from decepticon.tools.ad.adcs import analyze_adcs_templates
 from decepticon.tools.ad.bloodhound import merge_bloodhound_json
 from decepticon.tools.ad.dcsync import dcsync_candidates
 from decepticon.tools.ad.kerberos import classify_hashcat_hash, parse_ticket
-from decepticon.tools.research.graph import KnowledgeGraph
+from decepticon_core.types.kg import KnowledgeGraph
 
 
 class TestBloodHoundIngest:

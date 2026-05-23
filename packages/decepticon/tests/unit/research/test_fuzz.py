@@ -14,7 +14,7 @@ from decepticon.tools.research.fuzz import (
     parse_asan,
     record_crash,
 )
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind, Severity
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind, Severity
 
 
 class TestClassifyTarget:

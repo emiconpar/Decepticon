@@ -31,15 +31,15 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from decepticon.core.logging import get_logger
-from decepticon.llm.models import (
+from decepticon.llm.router import ModelRouter
+from decepticon_core.types.llm import (
     AuthMethod,
     Credentials,
     LLMModelMapping,
     ModelProfile,
     ProxyConfig,
 )
-from decepticon.llm.router import ModelRouter
+from decepticon_core.utils.logging import get_logger
 
 log = get_logger("llm.factory")
 
@@ -848,7 +848,7 @@ class LLMFactory:
     @staticmethod
     def _resolve_proxy_config() -> ProxyConfig:
         """Resolve proxy config from DecepticonConfig (env vars)."""
-        from decepticon.core.config import load_config
+        from decepticon_core.utils.config import load_config
 
         config = load_config()
         return ProxyConfig(
@@ -861,7 +861,7 @@ class LLMFactory:
     @staticmethod
     def _resolve_profile() -> ModelProfile:
         """Resolve the model profile from DecepticonConfig (env var)."""
-        from decepticon.core.config import load_config
+        from decepticon_core.utils.config import load_config
 
         return load_config().model_profile
 

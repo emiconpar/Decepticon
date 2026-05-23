@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from decepticon.core.schemas import (
+from decepticon_core.types.engagement import (
     CONOPS,
     OPPLAN,
     DeconflictionPlan,

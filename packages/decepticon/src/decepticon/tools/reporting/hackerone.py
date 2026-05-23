@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from decepticon.tools.research.graph import KnowledgeGraph, Node
+from decepticon_core.types.kg import KnowledgeGraph, Node
 
 
 @dataclass

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind
 
 
 def _count_by_severity(graph: KnowledgeGraph) -> dict[str, int]:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from decepticon import plugin_loader
+from decepticon_core import plugin_loader
 
 
 class _FakeEntryPoint:

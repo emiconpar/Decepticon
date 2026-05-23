@@ -9,7 +9,7 @@ can replicate directory data including krbtgt hash → golden ticket.
 
 from __future__ import annotations
 
-from decepticon.tools.research.graph import EdgeKind, KnowledgeGraph
+from decepticon_core.types.kg import EdgeKind, KnowledgeGraph
 
 
 def dcsync_candidates(graph: KnowledgeGraph) -> list[tuple[str, str]]:

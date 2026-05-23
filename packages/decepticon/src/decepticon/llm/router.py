@@ -6,7 +6,7 @@ for primary-only and primary+fallback resolution.
 
 from __future__ import annotations
 
-from decepticon.llm.models import LLMModelMapping, ModelAssignment
+from decepticon_core.types.llm import LLMModelMapping, ModelAssignment
 
 
 class ModelRouter:

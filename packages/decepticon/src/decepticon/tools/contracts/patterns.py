@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from decepticon.tools.research.graph import Severity
+from decepticon_core.types.kg import Severity
 
 
 @dataclass

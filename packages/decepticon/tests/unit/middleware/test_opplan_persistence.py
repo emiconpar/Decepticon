@@ -21,7 +21,6 @@ import pytest
 from deepagents.backends.filesystem import FilesystemBackend
 from langchain_core.messages import AIMessage, ToolMessage
 
-from decepticon.core.schemas import OPPLAN, Objective, ObjectivePhase
 from decepticon.middleware import opplan as opplan_mod
 from decepticon.middleware.opplan import OPPLANMiddleware
 from decepticon.tools.opplan import (
@@ -32,6 +31,7 @@ from decepticon.tools.opplan import (
     _format_opplan_for_agent,
     _persist_opplan_to_backend,
 )
+from decepticon_core.types.engagement import OPPLAN, Objective, ObjectivePhase
 
 
 def _obj_dict(obj_id: str, **overrides: Any) -> dict:

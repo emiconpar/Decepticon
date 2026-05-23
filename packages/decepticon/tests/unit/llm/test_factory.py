@@ -12,7 +12,7 @@ from decepticon.llm.factory import (
     _oauth_credentials_present,
     _resolve_credentials,
 )
-from decepticon.llm.models import (
+from decepticon_core.types.llm import (
     AuthMethod,
     Credentials,
     LLMModelMapping,
@@ -418,7 +418,7 @@ class TestResolveCredentials:
         ):
             monkeypatch.delenv(flag, raising=False)
 
-        # ``decepticon.core.logging`` sets the parent decepticon logger
+        # ``decepticon_core.utils.logging`` sets the parent decepticon logger
         # to ``propagate=False`` so library output doesn't double up in
         # apps that own their root handler. caplog hooks the root logger,
         # so without re-enabling propagation our ERROR record never
@@ -467,7 +467,7 @@ class TestResolveCredentials:
 
         # Match the explicit-priority test's pattern so caplog sees the
         # records — the decepticon parent logger defaults to
-        # ``propagate=False`` per ``decepticon.core.logging``.
+        # ``propagate=False`` per ``decepticon_core.utils.logging``.
         decepticon_log = logging.getLogger("decepticon")
         monkeypatch.setattr(decepticon_log, "propagate", True)
 

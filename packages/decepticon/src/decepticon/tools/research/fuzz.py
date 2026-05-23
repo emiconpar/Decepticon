@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
-from decepticon.tools.research.graph import (
+from decepticon_core.types.kg import (
     Edge,
     EdgeKind,
     KnowledgeGraph,

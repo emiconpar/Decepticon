@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from decepticon.tools.research import tools as research_tools
-from decepticon.tools.research.graph import KnowledgeGraph, NodeKind
+from decepticon_core.types.kg import KnowledgeGraph, NodeKind
 
 
 class _FakeStore:
