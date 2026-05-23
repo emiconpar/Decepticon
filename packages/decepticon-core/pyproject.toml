@@ -1,0 +1,51 @@
+[project]
+name = "decepticon-core"
+# Sentinel — replaced with the git tag at build time, in lockstep with the
+# rest of the workspace. See containers/langgraph.Dockerfile and the
+# release workflow.
+version = "0.0.0"
+description = "Decepticon contract layer: pure types, protocols, plugin contracts, registry primitives"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.13"
+
+authors = [
+    { name = "Decepticon Team" }
+]
+
+keywords = [
+    "ai", "security", "red-team", "agents", "plugins", "contracts"
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+
+# decepticon-core is the contract layer. By design it never imports
+# langchain / langgraph / deepagents / httpx / fastapi — plugin authors
+# can depend on this package without dragging the framework runtime
+# into their environment. Enforced by tests and (in Phase 1) a ruff
+# banned-api rule.
+dependencies = [
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "typing-extensions>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/PurpleAILAB/Decepticon"
+Repository = "https://github.com/PurpleAILAB/Decepticon"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/decepticon_core"]
