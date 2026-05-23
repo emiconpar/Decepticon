@@ -78,7 +78,11 @@ known-first-party = ["decepticon", "decepticon_core", "decepticon_sdk"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["packages/decepticon/tests"]
+testpaths = [
+    "packages/decepticon-core/tests",
+    "packages/decepticon/tests",
+    "packages/decepticon-sdk/tests",
+]
 markers = [
     "asyncio: mark test as async (pytest-asyncio)",
     "slow: integration-style tests that hit wall-clock timeouts or otherwise take seconds; deselected from the PR fast lane",
@@ -115,9 +119,11 @@ skip_covered = false
 pythonVersion = "3.13"
 include = [
     "packages/decepticon-core/src",
+    "packages/decepticon-core/tests",
     "packages/decepticon/src",
-    "packages/decepticon-sdk/src",
     "packages/decepticon/tests",
+    "packages/decepticon-sdk/src",
+    "packages/decepticon-sdk/tests",
     "benchmark",
 ]
 exclude = [
