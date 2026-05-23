@@ -39,6 +39,13 @@ testing = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
 # lean for the pure-protocols path.
 fixtures = ["decepticon"]
 
+[project.scripts]
+# ``decepticon-sdk plugin new --kind=... --name=... --path=...`` —
+# scaffolds a buildable plugin package for one of the six supported
+# plugin kinds (tool / middleware / agent / callback / skill / prompt).
+# Source at ``decepticon_sdk.scaffold.cli``.
+decepticon-sdk = "decepticon_sdk.scaffold.cli:app"
+
 [project.urls]
 Homepage = "https://github.com/PurpleAILAB/Decepticon"
 Repository = "https://github.com/PurpleAILAB/Decepticon"
