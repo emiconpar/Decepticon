@@ -1,262 +1,111 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
 [project]
 name = "decepticon"
-# Sentinel — replaced with the git tag at Docker build time via ARG VERSION
-# in containers/langgraph.Dockerfile. Source-tree value is intentionally
-# stable (not bumped per release) so contributors never need a manual
-# version commit before tagging.
-version = "0.0.0"
-description = "AI-powered autonomous red team testing framework"
+version = "0.1.0"
+description = "Decepticon - AI-powered adversarial testing and red-teaming framework"
 readme = "README.md"
-license = { text = "Apache-2.0" }
-license-files = ["LICENSE"]
-requires-python = ">=3.13"
-
+requires-python = ">=3.10"
+license = { text = "MIT" }
 authors = [
-    { name = "Decepticon Team" }
+    { name = "Decepticon Contributors" }
 ]
-
-keywords = [
-    "ai", "security", "red-team", "penetration-testing",
-    "llm", "langchain", "langgraph", "autonomous-agents"
-]
-
+keywords = ["ai", "red-teaming", "adversarial", "llm", "security", "testing"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "Intended Audience :: Information Technology",
-    "License :: OSI Approved :: Apache Software License",
-    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Security",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
 ]
-
 dependencies = [
-    # Core
-    "pydantic>=2.0.0",
-    "pydantic-settings>=2.0.0",
-    "pyyaml>=6.0.0",
-    "python-dotenv>=1.0.0",
-    # LLM
-    "langchain-core>=0.3.0",
-    "langchain-openai>=0.3.0",
-    "langchain-anthropic>=0.3.0",
-    "langgraph>=1.0.0",
-    "langgraph-cli[inmem]>=0.2.0",
-    "langgraph-sdk>=0.1.0",
-    # HTTP
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
     "httpx>=0.27.0",
-    "deepagents>=0.5.0",
-    # Sandbox HTTP daemon — the FastAPI app that ships inside the
-    # sandbox container and that `HTTPSandbox` (decepticon/backends/
-    # http_sandbox.py) talks to. Carried in the main install set
-    # because the sandbox container mounts decepticon as
-    # /deps/decepticon and runs `python -m decepticon.sandbox_server`
-    # as its entrypoint; the agent process imports nothing from these
-    # at runtime.
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-    # CLI
-    "typer[all]>=0.9.0",
-    "xxhash>=3.0.0",
-    # Security
-    "defusedxml>=0.7.0",
+    "openai>=1.35.0",
+    "anthropic>=0.29.0",
+    "python-dotenv>=1.0.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "redis>=5.0.0",
+    "celery>=5.4.0",
+    "loguru>=0.7.0",
+    "tenacity>=8.3.0",
+    "rich>=13.7.0",
+    "typer>=0.12.0",
 ]
 
 [project.optional-dependencies]
-# Heavy / feature-specific deps kept out of the base install so
-# `pip install decepticon` stays lean for library consumers. The neo4j
-# driver is imported lazily (decepticon/tools/research/neo4j_store.py), so
-# the base install imports and runs everything except the KG graph tools.
-neo4j = ["neo4j>=5.0"]
-all = ["decepticon[neo4j]"]
-
-[dependency-groups]
 dev = [
-    "pytest>=8.0.0",
+    "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.0.0",
-    "pytest-xdist>=3.6.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.27.0",
     "ruff>=0.4.0",
-    "basedpyright>=1.37.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+    "factory-boy>=3.3.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
 ]
 
 [project.scripts]
-decepticon-kg-health = "decepticon.tools.research.health:main"
-
-# Plugin entry-point groups consumed by ``decepticon.plugin_loader``.
-# External packages (SaaS or community plugins) declare their
-# contributions under these groups. See ``decepticon/plugin_loader.py``
-# for the loader contract (shapes, factory kwargs, error isolation).
-#
-#   [project.entry-points."decepticon.tools"]
-#   my-tools = "my_pkg.tools:get_tools"
-#
-#   [project.entry-points."decepticon.middleware"]
-#   my-mw = "my_pkg.middleware:get_middleware"
-#
-#   [project.entry-points."decepticon.agents"]
-#   my-agent = "my_pkg.agents.my_agent"
-#
-#   [project.entry-points."decepticon.subagents"]
-#   my-subagent = "my_pkg.agents.my_subagent:SUBAGENT_SPEC"
-#
-#   [project.entry-points."decepticon.callbacks"]
-#   my-cb = "my_pkg.callbacks:get_callbacks"
-
-# OSS-shipped subagents — registered here so the plugin loader picks
-# them up uniformly with external plugins. Each entry resolves to a
-# ``SubAgentSpec`` module constant declaring (name, description,
-# factory, parent_agents, bundle, priority). The main agents iterate
-# ``load_subagents_for_parent(<their-name>)`` at construction time;
-# adding a new subagent — OSS or plugin — is a pure entry-point
-# registration with no main-agent edits required.
-#
-# Bundle activation — controlled by a 4-tier hierarchy (highest wins):
-#   1. DECEPTICON_PLUGINS env var (e.g. "standard,plugins,saas" or "*")
-#   2. .decepticon.toml: [plugins] enabled = [...]
-#   3. pyproject.toml: [tool.decepticon.plugins] enabled = [...]
-#   4. Default: ["standard"]
-# Default keeps OSS lean. The ``plugins`` bundle (vulnresearch family)
-# is opt-in. See decepticon/plugin_loader.py for the loader contract.
-
-# Default Decepticon project config — kept in OSS so this checkout's
-# native dev workflow (e.g. ``make benchmark``, ``langgraph dev``)
-# automatically activates both bundles instead of forcing every
-# developer to remember the env var. End-user OSS installs that DON'T
-# clone this repo see the hardcoded ``["standard"]`` default; SaaS
-# images override via ``ENV DECEPTICON_PLUGINS=standard,saas``.
-
-[tool.decepticon.plugins]
-enabled = ["standard", "plugins"]
-
-[project.entry-points."decepticon.subagents"]
-# Standard bundle — attached to the ``decepticon`` main agent.
-recon = "decepticon.agents.standard.recon:SUBAGENT_SPEC"
-exploit = "decepticon.agents.standard.exploit:SUBAGENT_SPEC"
-analyst = "decepticon.agents.standard.analyst:SUBAGENT_SPEC"
-reverser = "decepticon.agents.standard.reverser:SUBAGENT_SPEC"
-contract_auditor = "decepticon.agents.standard.contract_auditor:SUBAGENT_SPEC"
-cloud_hunter = "decepticon.agents.standard.cloud_hunter:SUBAGENT_SPEC"
-ad_operator = "decepticon.agents.standard.ad_operator:SUBAGENT_SPEC"
-postexploit = "decepticon.agents.standard.postexploit:SUBAGENT_SPEC"
-# Plugins bundle — vulnresearch family, attached to the ``vulnresearch`` main agent.
-scanner = "decepticon.agents.plugins.scanner:SUBAGENT_SPEC"
-detector = "decepticon.agents.plugins.detector:SUBAGENT_SPEC"
-verifier = "decepticon.agents.plugins.verifier:SUBAGENT_SPEC"
-patcher = "decepticon.agents.plugins.patcher:SUBAGENT_SPEC"
-exploiter = "decepticon.agents.plugins.exploiter:SUBAGENT_SPEC"
+decepticon = "decepticon.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/PurpleAILAB/Decepticon"
 Repository = "https://github.com/PurpleAILAB/Decepticon"
+Issues = "https://github.com/PurpleAILAB/Decepticon/issues"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["decepticon"]
-# Skill markdown trees (standard/shared/plugins) ship as package data and are
-# included by default since they are VCS-tracked. Benchmark skills are
-# XBOW/CTF eval-harness conventions — kept in-repo for `make benchmark` but
-# excluded from the published wheel.
-exclude = ["decepticon/skills/benchmark/**"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
-extend-exclude = [
-    "benchmark/xbow-validation-benchmarks",
-    "benchmark/MHBench",
-    "benchmark/results",
-]
+target-version = "py310"
+src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
-ignore = ["E501"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["decepticon"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+mypy_path = "src"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = [
-    "asyncio: mark test as async (pytest-asyncio)",
-    "slow: integration-style tests that hit wall-clock timeouts or otherwise take seconds; deselected from the PR fast lane",
-]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "-ra",
-]
+asyncio_mode = "auto"
+addopts = "--cov=src/decepticon --cov-report=term-missing --cov-report=xml"
 
 [tool.coverage.run]
-source = ["decepticon"]
-branch = true
-omit = [
-    "decepticon/__main__.py",
-    "decepticon/auth/providers/*",
-]
-
-[tool.coverage.html]
-directory = "htmlcov"
+source = ["src/decepticon"]
+omit = ["*/tests/*", "*/migrations/*"]
 
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
+    "def __repr__",
     "raise NotImplementedError",
     "if TYPE_CHECKING:",
-    "if __name__ == .__main__.:",
-    "\\.\\.\\.",
 ]
-show_missing = true
-skip_covered = false
-
-[tool.basedpyright]
-pythonVersion = "3.13"
-include = ["decepticon", "tests", "benchmark"]
-exclude = [
-    "**/__pycache__",
-    "**/node_modules",
-    "reference",
-    "decepticon/auth/providers",
-    "benchmark/xbow-validation-benchmarks",
-    "benchmark/MHBench",
-    "benchmark/results",
-]
-# Use pyright "standard" semantics rather than the basedpyright "all" default —
-# the existing codebase predates basedpyright's stricter rules. As code is
-# annotated over time, individual reports can be ratcheted back to "error".
-typeCheckingMode = "standard"
-reportMissingImports = "warning"
-reportMissingTypeStubs = "none"
-# Unknown types — common with langchain/langgraph dynamic interfaces
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-reportUnknownVariableType = "none"
-reportUnknownParameterType = "none"
-reportUnknownLambdaType = "none"
-reportMissingTypeArgument = "none"
-# basedpyright extras that fire on idiomatic Python
-reportAny = "none"
-reportExplicitAny = "none"
-reportImplicitOverride = "none"
-reportUnusedCallResult = "none"
-reportUnannotatedClassAttribute = "none"
-reportUninitializedInstanceVariable = "none"
-reportImplicitStringConcatenation = "none"
-reportPrivateUsage = "none"
-reportImportCycles = "none"
-reportPropertyTypeMismatch = "none"
-reportIgnoreCommentWithoutRule = "none"
-# Demote pre-existing issues to warnings (still surfaced, but non-blocking).
-# Real attribute-access bugs in newly-written code should still be caught:
-# add a # pyright: ignore[reportAttributeAccessIssue] comment at the call site
-# instead of escalating this back to "error" wholesale.
-reportAttributeAccessIssue = "warning"
-reportOperatorIssue = "warning"
-reportArgumentType = "warning"
-reportCallIssue = "warning"
-reportAssignmentType = "warning"
-reportReturnType = "warning"
-reportGeneralTypeIssues = "warning"
