@@ -67,6 +67,7 @@ docs = [
 decepticon = "decepticon.cli:app"
 
 [project.urls]
+# Personal fork - upstream: https://github.com/PurpleAILAB/Decepticon
 Homepage = "https://github.com/PurpleAILAB/Decepticon"
 Repository = "https://github.com/PurpleAILAB/Decepticon"
 Issues = "https://github.com/PurpleAILAB/Decepticon/issues"
@@ -96,7 +97,8 @@ mypy_path = "src"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=src/decepticon --cov-report=term-missing --cov-report=xml"
+# Removed --cov-report=xml locally since I don't use CI coverage uploads
+addopts = "--cov=src/decepticon --cov-report=term-missing"
 
 [tool.coverage.run]
 source = ["src/decepticon"]
