@@ -107,7 +107,6 @@ Contributions are welcome! Please read our [contributing guidelines](CONTRIBUTIN
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgements
+---
 
-- Original project: [PurpleAILAB/Decepticon](https://github.com/PurpleAILAB/Decepticon)
-- Inspired by the AI red teaming community
+> **Personal note:** I'm using this fork primarily to experiment with the `jailbreak` attack suite against open-source models (Mistral, LLaMA). The upstream project focuses mostly on OpenAI/Anthropic targets, so I may add a local Ollama provider integration down the line.
